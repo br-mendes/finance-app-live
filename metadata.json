@@ -1,0 +1,5 @@
+{
+  "name": "FinanceAPP",
+  "description": "A complete personal finance management system with Freemium plans, dashboards, and Mercado Pago integration.",
+  "requestFramePermissions": []
+}

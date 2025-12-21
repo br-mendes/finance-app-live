@@ -1,0 +1,20 @@
+{
+  "short_name": "FinanceAPP",
+  "name": "FinanceAPP - Gestão Financeira Inteligente",
+  "icons": [
+    {
+      "src": "https://i.ibb.co/9mt6zRFj/generated-image-removebg-preview.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "https://i.ibb.co/9mt6zRFj/generated-image-removebg-preview.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ],
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#0ea5e9",
+  "background_color": "#ffffff"
+}
