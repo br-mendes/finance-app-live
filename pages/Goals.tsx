@@ -111,7 +111,8 @@ export const Goals: React.FC<GoalsProps> = ({ user }) => {
             current_amount: 0, // Visual calculation uses totalSavings
             deadline: formData.deadline || undefined,
             icon: formData.icon,
-            created_at: new Date().toISOString()
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
         };
 
         if (editingId) {
@@ -193,18 +194,18 @@ export const Goals: React.FC<GoalsProps> = ({ user }) => {
 
                     return (
                         <Card key={goal.id} className={`relative flex flex-col h-full border-t-4 ${isCompleted ? 'border-t-green-500' : 'border-t-primary-500'} hover:shadow-lg transition-all`}>
-                            {/* Actions */}
-                            <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            {/* Actions - Always Visible for Better UX */}
+                            <div className="absolute top-4 right-4 flex gap-2 z-10">
                                 <button 
-                                    onClick={() => handleOpenModal(goal)} 
-                                    className="text-gray-400 hover:text-primary-600 p-1.5 hover:bg-gray-100 rounded transition-colors"
+                                    onClick={(e) => { e.stopPropagation(); handleOpenModal(goal); }}
+                                    className="text-gray-400 hover:text-primary-600 p-1.5 bg-white/50 hover:bg-white rounded-full transition-all border border-transparent hover:border-gray-200 shadow-sm backdrop-blur-sm"
                                     title="Editar"
                                 >
                                     <Edit2 size={16} />
                                 </button>
                                 <button 
-                                    onClick={() => handleDelete(goal.id)} 
-                                    className="text-gray-400 hover:text-red-600 p-1.5 hover:bg-gray-100 rounded transition-colors"
+                                    onClick={(e) => { e.stopPropagation(); handleDelete(goal.id); }}
+                                    className="text-gray-400 hover:text-red-600 p-1.5 bg-white/50 hover:bg-white rounded-full transition-all border border-transparent hover:border-gray-200 shadow-sm backdrop-blur-sm"
                                     title="Excluir"
                                 >
                                     <Trash2 size={16} />

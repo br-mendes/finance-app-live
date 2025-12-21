@@ -3,28 +3,42 @@ import { User } from '../types';
 // NOTE: In a production environment, this API Key should be stored in environment variables (process.env)
 // and these calls should happen server-side (e.g., Supabase Edge Functions or Node.js backend)
 // to prevent exposing the key to the client.
-// We check for Vite Env Var first, then fallback to the provided key for demo purposes.
-const RESEND_API_KEY = import.meta.env?.VITE_RESEND_API_KEY || '017e1f38-7843-44fc-adff-412e33f2f289';
+const SENDGRID_API_KEY = import.meta.env?.VITE_SENDGRID_API_KEY || '';
+const SENDGRID_FROM_EMAIL = 'financeappbr@gmail.com'; // Must be a verified sender in SendGrid
 
 const sendEmail = async (to: string, subject: string, html: string) => {
+  if (!SENDGRID_API_KEY) {
+    console.warn('SendGrid API Key is missing. Check your VITE_SENDGRID_API_KEY environment variable.');
+    return false;
+  }
+
   try {
-    const response = await fetch('https://api.resend.com/emails', {
+    const response = await fetch('https://api.sendgrid.com/v3/mail/send', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${RESEND_API_KEY}`
+        'Authorization': `Bearer ${SENDGRID_API_KEY}`
       },
       body: JSON.stringify({
-        from: 'FinanceAPP <onboarding@resend.dev>', // Default testing domain for Resend
-        to: [to],
+        personalizations: [
+          {
+            to: [{ email: to }]
+          }
+        ],
+        from: { email: SENDGRID_FROM_EMAIL, name: 'FinanceAPP' },
         subject: subject,
-        html: html
+        content: [
+          {
+            type: 'text/html',
+            value: html
+          }
+        ]
       })
     });
 
     if (!response.ok) {
         const errorData = await response.json();
-        console.error('Resend API Error:', errorData);
+        console.error('SendGrid API Error:', errorData);
         return false;
     }
 
@@ -70,21 +84,18 @@ export const emailService = {
           <li>Exportação de relatórios em PDF</li>
         </ul>
         <br/>
-        <a href="https://financeapp.com/#/" style="background-color: #0ea5e9; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Acessar Dashboard</a>
+        <a href="https://finance-app-live.vercel.app/#/" style="background-color: #0ea5e9; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Acessar Dashboard</a>
       </div>
     `;
     return sendEmail(user.email, subject, html);
   },
 
   async sendContactMessage(name: string, fromEmail: string, subject: string, message: string) {
-    // In a real app, 'to' would be the admin email. 
-    // Since Resend Free Tier allows sending ONLY to the registered account email, 
-    // we assume the 'fromEmail' (user) is also the destination for this demo to ensure delivery,
-    // or you strictly send to your own registered email.
-    
-    // For this demo, we send to the user as a "Copy of your message" to prove it works.
+    // Send to Admin
+    const adminEmail = 'financeappbr@gmail.com';
     const emailSubject = `[Contato FinanceAPP] ${subject}`;
-    const html = `
+    
+    const htmlAdmin = `
       <div style="font-family: sans-serif; color: #333;">
         <h2 style="color: #0ea5e9;">Nova Mensagem de Contato</h2>
         <p><strong>De:</strong> ${name} (${fromEmail})</p>
@@ -93,6 +104,25 @@ export const emailService = {
         <p style="white-space: pre-wrap;">${message}</p>
       </div>
     `;
-    return sendEmail(fromEmail, emailSubject, html);
+
+    // Try to send to admin
+    const adminSent = await sendEmail(adminEmail, emailSubject, htmlAdmin);
+
+    // If successful, send confirmation to user (optional but nice)
+    if (adminSent) {
+        const htmlUser = `
+          <div style="font-family: sans-serif; color: #333;">
+            <h2 style="color: #0ea5e9;">Recebemos sua mensagem!</h2>
+            <p>Olá ${name},</p>
+            <p>Obrigado por entrar em contato. Nossa equipe analisará sua mensagem e retornará em breve.</p>
+            <hr/>
+            <p><strong>Sua mensagem:</strong></p>
+            <p><em>${message}</em></p>
+          </div>
+        `;
+        await sendEmail(fromEmail, `Recebemos seu contato: ${subject}`, htmlUser);
+    }
+    
+    return adminSent;
   }
 };
