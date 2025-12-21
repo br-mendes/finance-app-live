@@ -13,23 +13,11 @@ import { CATEGORIES } from '../constants';
 import { jsPDF } from "jspdf";
 import autoTable from 'jspdf-autotable';
 import { transactionSchema } from '../utils/schemas';
+import { dataManager } from '../utils/dataManager';
 
 interface TransactionsProps {
     user: User;
 }
-
-// Initial Mock Data
-const INITIAL_TRANSACTIONS: Transaction[] = [
-    {
-        id: '1',
-        date: new Date().toISOString(),
-        description: 'Bônus Anual',
-        category: 'Salário',
-        type: TransactionType.RECEIVE,
-        amount: 2500.00,
-        account_id: '1'
-    }
-];
 
 const ITEMS_PER_PAGE = 50;
 
@@ -71,33 +59,16 @@ export const Transactions: React.FC<TransactionsProps> = ({ user }) => {
         installmentsCount: 2
     });
 
-    // --- Load Data on Mount ---
-    useEffect(() => {
-        const storedTrans = localStorage.getItem('financeapp_transactions');
-        if (storedTrans) {
-            setTransactions(JSON.parse(storedTrans));
-        } else {
-            setTransactions(INITIAL_TRANSACTIONS);
-        }
-
-        const storedAccounts = localStorage.getItem('financeapp_accounts'); 
-        if (storedAccounts) {
-            setAccounts(JSON.parse(storedAccounts));
-        } else {
-             const mockAccounts: Account[] = [{id: '1', user_id: user.id, account_type: 'checking' as any, institution_name: 'Conta Principal', balance: 0, created_at: new Date().toISOString(), updated_at: new Date().toISOString()}];
-             setAccounts(mockAccounts);
-             localStorage.setItem('financeapp_accounts', JSON.stringify(mockAccounts));
-        }
-
-        const storedCards = localStorage.getItem('financeapp_cards'); 
-        if (storedCards) {
-            setCards(JSON.parse(storedCards));
-        }
-    }, [user.id]);
+    // --- Load Data ---
+    const loadData = () => {
+        setTransactions(dataManager.getTransactions());
+        setAccounts(dataManager.getAccounts());
+        setCards(dataManager.getCards());
+    };
 
     useEffect(() => {
-        localStorage.setItem('financeapp_transactions', JSON.stringify(transactions));
-    }, [transactions]);
+        loadData();
+    }, []);
 
     // --- Filter Logic ---
     const filteredTransactions = transactions.filter(t => {
@@ -160,12 +131,9 @@ export const Transactions: React.FC<TransactionsProps> = ({ user }) => {
     const handleSave = () => {
         const amountVal = parseFloat(formData.amount.replace(',', '.'));
 
-        // Prepare data for Zod validation
         const dataToValidate = {
             ...formData,
             amount: amountVal,
-            // Only send relevant ID based on type for checking, 
-            // though schema handles optionality.
             accountId: formData.accountId || undefined,
             cardId: formData.cardId || undefined
         };
@@ -178,101 +146,39 @@ export const Transactions: React.FC<TransactionsProps> = ({ user }) => {
             return;
         }
 
-        const newTransactions: Transaction[] = [];
-        
         const baseTrans: Transaction = {
             id: editingId || Date.now().toString(),
             description: formData.description,
             amount: amountVal,
             type: formData.type,
             category: formData.category,
-            date: formData.date,
+            date: new Date(formData.date).toISOString(),
+            account_id: formData.type !== TransactionType.CREDIT ? formData.accountId : undefined,
+            credit_card_id: formData.type === TransactionType.CREDIT ? formData.cardId : undefined,
         };
 
-        if (formData.type === TransactionType.DEBIT) {
-            baseTrans.account_id = formData.accountId;
-
-            if (!editingId) { 
-                const updatedAccounts = accounts.map(acc => {
-                    if (acc.id === formData.accountId) {
-                        return { ...acc, balance: acc.balance - amountVal };
-                    }
-                    return acc;
-                });
-                setAccounts(updatedAccounts);
-                localStorage.setItem('financeapp_accounts', JSON.stringify(updatedAccounts));
-            }
-            newTransactions.push(baseTrans);
-
-        } else if (formData.type === TransactionType.RECEIVE) {
-            baseTrans.account_id = formData.accountId;
-
-            if (!editingId) {
-                const updatedAccounts = accounts.map(acc => {
-                    if (acc.id === formData.accountId) {
-                        return { ...acc, balance: acc.balance + amountVal };
-                    }
-                    return acc;
-                });
-                setAccounts(updatedAccounts);
-                localStorage.setItem('financeapp_accounts', JSON.stringify(updatedAccounts));
-            }
-            newTransactions.push(baseTrans);
-
-        } else if (formData.type === TransactionType.CREDIT) {
-            baseTrans.credit_card_id = formData.cardId;
-
-            if (!editingId) {
-                const updatedCards = cards.map(c => {
-                    if (c.id === formData.cardId) {
-                        return { ...c, limit_amount: c.limit_amount - amountVal };
-                    }
-                    return c;
-                });
-                setCards(updatedCards);
-                localStorage.setItem('financeapp_cards', JSON.stringify(updatedCards));
-            }
-
-            if (formData.isInstallment && !editingId) {
-                const count = formData.installmentsCount;
-                const installmentValue = amountVal / count;
-                const baseDate = new Date(formData.date);
-
-                for (let i = 0; i < count; i++) {
-                    const nextDate = new Date(baseDate);
-                    nextDate.setMonth(baseDate.getMonth() + i); 
-                    
-                    newTransactions.push({
-                        ...baseTrans,
-                        id: `${Date.now()}-${i}`,
-                        date: nextDate.toISOString(),
-                        description: `${formData.description} (${i+1}/${count})`,
-                        amount: parseFloat(installmentValue.toFixed(2)),
-                        total_installments: count,
-                        installment_number: i + 1
-                    });
-                }
-            } else {
-                newTransactions.push(baseTrans);
-            }
-        }
-
         if (editingId) {
-            setTransactions(prev => prev.map(t => t.id === editingId ? { ...baseTrans, date: new Date(formData.date).toISOString() } : t));
+            dataManager.updateTransaction(editingId, baseTrans);
             addToast("Transação atualizada com sucesso!", "success");
         } else {
-            const finalTrans = newTransactions.map(t => ({...t, date: new Date(t.date).toISOString() }));
-            setTransactions(prev => [...finalTrans, ...prev]);
-            addToast("Transação criada com sucesso!", "success");
+            if (formData.type === TransactionType.CREDIT && formData.isInstallment) {
+                dataManager.addInstallmentTransaction(baseTrans, formData.installmentsCount);
+                addToast("Compra parcelada criada!", "success");
+            } else {
+                dataManager.addTransaction(baseTrans);
+                addToast("Transação criada com sucesso!", "success");
+            }
         }
 
         setIsModalOpen(false);
+        loadData(); // Refresh local state from manager
     };
 
     const handleDelete = (id: string) => {
-        if (window.confirm("Deseja realmente excluir?")) {
-            setTransactions(prev => prev.filter(t => t.id !== id));
+        if (window.confirm("Deseja realmente excluir? Os saldos serão revertidos.")) {
+            dataManager.deleteTransaction(id);
             addToast("Transação excluída.", "info");
+            loadData();
         }
     };
 
