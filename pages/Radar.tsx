@@ -4,7 +4,7 @@ import { Button } from '../components/ui/Button';
 import { Modal } from '../components/ui/Modal';
 import { GoogleGenAI } from "@google/genai";
 import { User, PlanType } from '../types';
-import { Lock, RefreshCw, ExternalLink, Calendar, Newspaper, Crown, AlertTriangle, TrendingUp, Globe } from 'lucide-react';
+import { Lock, RefreshCw, ExternalLink, Calendar, Newspaper, Crown, AlertTriangle, TrendingUp, Globe, Sparkles } from 'lucide-react';
 
 interface RadarProps {
     user: User;
@@ -13,6 +13,7 @@ interface RadarProps {
 interface NewsItem {
     title: string;
     summary: string;
+    ai_insights?: string; // New field for specific AI analysis
     category: string;
     date: string;
     source: string;
@@ -76,7 +77,8 @@ export const Radar: React.FC<RadarProps> = ({ user }) => {
             [
               {
                 "title": "Título curto e impactante",
-                "summary": "Resumo em pt-BR de até 200 caracteres explicando o impacto no bolso do investidor.",
+                "summary": "Resumo imparcial do fato em pt-BR (máx 200 caracteres).",
+                "ai_insights": "Sua análise estratégica como expert. Explique em uma frase curta (direta) qual a implicação prática para o investidor (Ex: 'Sinal de alerta para varejistas', 'Favorece exportadoras', 'Tende a elevar a curva de juros').",
                 "category": "Uma tag como: 'Bolsa Brasil', 'Economia Global', 'Câmbio', 'Renda Fixa'",
                 "date": "DD/MM",
                 "source": "Nome da fonte (ex: InfoMoney, G1, Bloomberg)",
@@ -102,9 +104,6 @@ export const Radar: React.FC<RadarProps> = ({ user }) => {
                 // Remove Markdown code blocks if present
                 const cleanJson = textResponse.replace(/```json/g, '').replace(/```/g, '').trim();
                 parsedNews = JSON.parse(cleanJson);
-                
-                // If using Grounding, we can try to enrich URLs if the model didn't provide them perfectly in JSON
-                // However, for simplicity, we rely on the model filling the "url" field via its tool use.
                 
             } catch (e) {
                 console.error("JSON Parse Error", e);
@@ -258,9 +257,22 @@ export const Radar: React.FC<RadarProps> = ({ user }) => {
                             {item.title}
                         </h3>
                         
-                        <p className="text-sm text-gray-600 mb-6 flex-grow leading-relaxed">
+                        <p className="text-sm text-gray-600 mb-4 flex-grow leading-relaxed">
                             {item.summary}
                         </p>
+
+                        {/* AI Insights Section */}
+                        {item.ai_insights && (
+                            <div className="bg-indigo-50 p-3 rounded-lg border border-indigo-100 mb-6">
+                                <div className="flex items-center gap-2 mb-1">
+                                    <Sparkles size={14} className="text-indigo-600 fill-indigo-200" />
+                                    <span className="text-xs font-bold text-indigo-700 uppercase">Insight de IA</span>
+                                </div>
+                                <p className="text-xs font-medium text-indigo-900 leading-relaxed italic">
+                                    "{item.ai_insights}"
+                                </p>
+                            </div>
+                        )}
                         
                         <div className="pt-4 border-t border-gray-100 flex justify-between items-center mt-auto">
                             <span className="text-xs font-semibold text-gray-500 flex items-center">
@@ -287,7 +299,7 @@ export const Radar: React.FC<RadarProps> = ({ user }) => {
             {news.length > 0 && (
                 <div className="text-center mt-8 pb-8">
                     <p className="text-xs text-gray-400 bg-gray-50 inline-block px-4 py-2 rounded-full">
-                        ⚡ Notícias agregadas e resumidas por Inteligência Artificial (Google Gemini). Verifique sempre as fontes oficiais.
+                        ⚡ Notícias agregadas e analisadas por Inteligência Artificial (Google Gemini). Verifique sempre as fontes oficiais.
                     </p>
                 </div>
             )}
