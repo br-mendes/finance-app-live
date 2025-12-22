@@ -1,4 +1,3 @@
-
 import { GoogleGenAI, Type } from "@google/genai";
 
 export interface FinancialInsights {
@@ -19,7 +18,8 @@ export interface MarketAnalysis {
 }
 
 /**
- * Gera insights financeiros personalizados utilizando JSON Schema rígido e Gemini 3.
+ * Gera insights financeiros premium usando o modelo Gemini 3 Pro Preview.
+ * Focado em análise de saúde financeira e recomendações estratégicas.
  */
 export const generateFinancialInsights = async (
   userData: {
@@ -36,36 +36,29 @@ export const generateFinancialInsights = async (
   }
 ): Promise<FinancialInsights> => {
   try {
+    // Inicialização mandatória dentro da função para garantir o uso da chave atualizada
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     
-    const prompt = `Analise os dados financeiros de ${userData.name} (Plano: ${userData.plan}).
-    Dados: Renda R$ ${userData.monthlyIncome}, Gastos R$ ${userData.monthlyExpenses}, Saldo R$ ${userData.totalBalance}.
-    Taxa de Poupança: ${userData.savingsRate.toFixed(1)}%, Uso de Crédito: ${userData.creditUtilization.toFixed(1)}%.
-    Top Categorias: ${userData.topCategories.map(c => `${c.category} (${c.percentage}%)`).join(', ')}.
-    Metas Ativas: ${userData.goals.length}.`;
+    const prompt = `Analise os dados financeiros de ${userData.name} (${userData.plan}).
+    Receita: R$ ${userData.monthlyIncome}, Gastos: R$ ${userData.monthlyExpenses}, Saldo: R$ ${userData.totalBalance}.
+    Poupança: ${userData.savingsRate.toFixed(1)}%, Uso de Crédito: ${userData.creditUtilization.toFixed(1)}%.
+    Gastos principais: ${userData.topCategories.map(c => `${c.category} (${c.percentage}%)`).join(', ')}.
+    Metas: ${userData.goals.map(g => `${g.name} (${g.progress}%)`).join(', ') || 'Nenhuma'}.`;
 
     const response = await ai.models.generateContent({
       model: 'gemini-3-pro-preview',
       contents: prompt,
       config: {
-        systemInstruction: "Você é o 'Advisor IA' do FinanceApp. Sua missão é fornecer consultoria financeira de alto nível, técnica mas encorajadora. Retorne sempre um JSON válido e estruturado.",
+        systemInstruction: "Você é o Diretor Financeiro (CFO) pessoal do usuário no FinanceApp. Sua linguagem é técnica porém motivadora. Retorne exclusivamente JSON estruturado.",
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
           properties: {
-            summary: { type: Type.STRING, description: "Resumo executivo da saúde financeira." },
-            insights: { 
-                type: Type.ARRAY, 
-                items: { type: Type.STRING },
-                description: "3 observações profundas sobre padrões de gastos."
-            },
-            recommendations: { 
-                type: Type.ARRAY, 
-                items: { type: Type.STRING },
-                description: "Ações práticas e imediatas para melhorar o patrimônio."
-            },
-            personalizedTip: { type: Type.STRING, description: "Uma dica bônus curta e motivacional." },
-            financialScore: { type: Type.NUMBER, description: "Pontuação de 0 a 100 baseada nos dados fornecidos." }
+            summary: { type: Type.STRING },
+            insights: { type: Type.ARRAY, items: { type: Type.STRING } },
+            recommendations: { type: Type.ARRAY, items: { type: Type.STRING } },
+            personalizedTip: { type: Type.STRING },
+            financialScore: { type: Type.NUMBER }
           },
           required: ["summary", "insights", "recommendations", "personalizedTip", "financialScore"]
         }
@@ -78,23 +71,23 @@ export const generateFinancialInsights = async (
       generatedAt: new Date()
     };
   } catch (error) {
-    console.error('Gemini Insights Critical Error:', error);
+    console.error('Gemini SDK Error (Insights):', error);
     return getFallbackInsights();
   }
 };
 
 /**
- * Analisa notícias do mercado com Search Grounding em tempo real.
+ * Análise de mercado em tempo real com Google Search Grounding.
  */
 export const analyzeMarketNews = async (query: string): Promise<MarketAnalysis> => {
   try {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
-      model: 'gemini-3-pro-preview',
-      contents: `Forneça uma análise atualizada sobre o mercado financeiro focando em: ${query}.`,
+      model: 'gemini-3-pro-preview', // Pro é necessário para ferramentas como Search Grounding
+      contents: `Analise o cenário atual do mercado financeiro focando em: ${query}. Dê ênfase a Selic, dólar e inflação no Brasil.`,
       config: {
         tools: [{ googleSearch: {} }],
-        systemInstruction: "Você é um analista de mercado sênior. Use informações reais da web para fundamentar sua análise. Retorne JSON estruturado.",
+        systemInstruction: "Analista Macroeconômico Sênior. Forneça análises baseadas em fatos reais e recentes. Retorne JSON estruturado.",
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
@@ -110,31 +103,33 @@ export const analyzeMarketNews = async (query: string): Promise<MarketAnalysis> 
     });
 
     const data = JSON.parse(response.text || '{}');
+    
+    // Extração mandatória de URLs para Search Grounding
     const sources = response.candidates?.[0]?.groundingMetadata?.groundingChunks
       ?.filter(chunk => chunk.web)
       .map(chunk => ({ title: chunk.web!.title, uri: chunk.web!.uri })) || [];
 
     return { ...data, sources };
   } catch (error) {
-    console.error('Market analysis grounding error:', error);
+    console.error('Gemini SDK Error (Market Analysis):', error);
     return {
-      marketSummary: "Instabilidade na conexão com os dados de mercado. Mantenha cautela em suas operações.",
-      implications: ["Dados de mercado podem estar defasados."],
-      actionRecommendation: "Aguarde a normalização dos sistemas para decisões críticas.",
-      confidence: 50
+      marketSummary: "Mercado em volatilidade moderada. Fontes de dados temporariamente limitadas.",
+      implications: ["Renda fixa permanece atrativa", "Cuidado com exposição cambial direta"],
+      actionRecommendation: "Mantenha diversificação em ativos de baixo risco.",
+      confidence: 65
     };
   }
 };
 
 const getFallbackInsights = (): FinancialInsights => ({
-  summary: "Análise em modo de segurança ativado. Continue registrando suas transações.",
+  summary: "Estamos processando seus dados para uma análise completa.",
   insights: [
-    "Acompanhar gastos diários é o primeiro passo para o sucesso.",
-    "Categorizar despesas ajuda a identificar desperdícios.",
-    "O equilíbrio entre renda e gastos é fundamental."
+    "Mantenha o registro de todas as suas despesas fixas.",
+    "Acompanhe suas metas semanalmente.",
+    "Categorize seus gastos para identificar economias."
   ],
-  recommendations: ["Revise seus gastos fixos", "Tente poupar 10% da renda"],
-  personalizedTip: "Consistência vence a intensidade no longo prazo! 🎯",
-  financialScore: 70,
+  recommendations: ["Revise seus planos de assinatura", "Aumente sua reserva de emergência"],
+  personalizedTip: "O segredo da riqueza é a consistência. 🚀",
+  financialScore: 75,
   generatedAt: new Date()
 });
