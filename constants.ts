@@ -1,11 +1,17 @@
+
 import { PlanType } from './types';
 
 export const APP_NAME = 'FinanceApp';
 
 // Supabase Configuration
-// Fix: Use process.env to avoid 'Property env does not exist on type ImportMeta' error
 export const SUPABASE_URL = process.env.VITE_SUPABASE_URL || 'https://rfbupauusvlcvnxtphhx.supabase.co';
 export const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY || 'sb_publishable_MAQmI9q0ukW976lWKo1MWQ_Tz459gnA';
+
+// PayPal Configuration
+export const PAYPAL_CLIENT_ID = process.env.VITE_PAYPAL_CLIENT_ID || 'ASWKvSJFWVfA6Ozq0fEHh-IOxASMglLgDCEQohznbJrtwUwVbfpIiQLiTyuQy9d8w0TjT-2wn-W_qNKR';
+export const PAYPAL_SECRET_KEY = process.env.VITE_PAYPAL_SECRET_KEY || '';
+export const PAYPAL_ENVIRONMENT = process.env.VITE_PAYPAL_ENVIRONMENT || 'sandbox';
+export const PAYPAL_SANDBOX_URL = process.env.VITE_PAYPAL_SANDBOX_URL || 'https://api-m.sandbox.paypal.com';
 
 // Special Users
 export const ADMIN_EMAIL = 'financeappbr@gmail.com';

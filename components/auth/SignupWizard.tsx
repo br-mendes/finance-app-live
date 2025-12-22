@@ -8,14 +8,17 @@ import { Card } from '../ui/Card';
 import { 
   Mail, ShieldCheck, ChevronRight, AlertCircle, 
   Loader2, CheckCircle2, ChevronLeft, MapPin, 
-  User as UserIcon, CreditCard
+  User as UserIcon, CreditCard, Sparkles
 } from 'lucide-react';
 import { formatCPF, isValidEmail, isValidCPF } from '../../utils/validators';
-import { PlanType, CheckoutAddress } from '../../types';
+import { PlanType, CheckoutAddress, User } from '../../types';
 import { createPremiumCheckout } from '../../services/mercadoPago';
+import { PayPalCheckoutButton } from '../payment/PayPalCheckoutButton';
 import { logAction } from '../../services/supabaseClient';
+// Fix: Import MOCK_USER from constants to resolve reference error
+import { MOCK_USER } from '../../constants';
 
-type Step = 'personal' | 'address' | 'plan';
+type Step = 'personal' | 'address' | 'plan' | 'payment';
 
 export const SignupWizard: React.FC<{ onLogin: (user: any) => void }> = ({ onLogin }) => {
   const navigate = useNavigate();
@@ -25,6 +28,7 @@ export const SignupWizard: React.FC<{ onLogin: (user: any) => void }> = ({ onLog
   const [loading, setLoading] = useState(false);
   const [checking, setChecking] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [tempUserId, setTempUserId] = useState<string | null>(null);
 
   const [formData, setFormData] = useState({
     email: '',
@@ -51,7 +55,7 @@ export const SignupWizard: React.FC<{ onLogin: (user: any) => void }> = ({ onLog
     const checkEmail = async () => {
       setChecking(true);
       try {
-        const { data, error } = await supabase.rpc('check_existing_user', {
+        const { data } = await supabase.rpc('check_existing_user', {
           p_email: formData.email,
           p_cpf: ''
         });
@@ -74,28 +78,6 @@ export const SignupWizard: React.FC<{ onLogin: (user: any) => void }> = ({ onLog
     return () => clearTimeout(timeoutId);
   }, [formData.email]);
 
-  const validateCPFUnique = async (cpf: string) => {
-    if (cpf.length < 14) return;
-    setChecking(true);
-    try {
-      const { data } = await supabase.rpc('check_existing_user', {
-        p_email: '',
-        p_cpf: cpf
-      });
-      if (data?.[0]?.exists_cpf) {
-        setErrors(prev => ({ ...prev, cpf: 'Este CPF já está cadastrado' }));
-      } else {
-        setErrors(prev => {
-          const newErrors = { ...prev };
-          delete newErrors.cpf;
-          return newErrors;
-        });
-      }
-    } finally {
-      setChecking(false);
-    }
-  };
-
   const handlePersonalNext = () => {
     if (!formData.email || !formData.cpf || !formData.firstName || !formData.lastName || !formData.password) {
       addToast("Preencha todos os campos obrigatórios.", "error");
@@ -117,10 +99,17 @@ export const SignupWizard: React.FC<{ onLogin: (user: any) => void }> = ({ onLog
     setCurrentStep('plan');
   };
 
-  const handleFinalSubmit = async () => {
+  const handlePlanSelection = async () => {
+    if (formData.plan === PlanType.FREE) {
+      await handleFinalRegistration();
+    } else {
+      setCurrentStep('payment');
+    }
+  };
+
+  const handleFinalRegistration = async () => {
     setLoading(true);
     try {
-      // 1. Supabase Auth Registration
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: formData.email,
         password: formData.password,
@@ -137,7 +126,7 @@ export const SignupWizard: React.FC<{ onLogin: (user: any) => void }> = ({ onLog
       if (authError) throw authError;
 
       const userId = authData.user?.id || `user-${Date.now()}`;
-      const newUser = {
+      const newUser: User = {
         id: userId,
         email: formData.email,
         first_name: formData.firstName,
@@ -150,24 +139,11 @@ export const SignupWizard: React.FC<{ onLogin: (user: any) => void }> = ({ onLog
       };
 
       await logAction(userId, 'USER_REGISTERED', { plan: formData.plan });
-
-      if (formData.plan === PlanType.PREMIUM) {
-        // Redirecionar para o Checkout do Mercado Pago
-        const { checkoutUrl } = await createPremiumCheckout({
-          userId,
-          userEmail: formData.email,
-          userName: `${formData.firstName} ${formData.lastName}`,
-          userCPF: formData.cpf,
-          address: formData.address,
-          planType: 'monthly'
-        });
-        localStorage.setItem('financeapp_user', JSON.stringify(newUser));
-        window.location.href = checkoutUrl;
-      } else {
-        onLogin(newUser);
-        addToast("Bem-vindo ao FinanceApp! 🎉", "success");
-        navigate('/');
-      }
+      
+      onLogin(newUser);
+      addToast("Bem-vindo ao FinanceApp! 🎉", "success");
+      navigate('/');
+      
     } catch (err: any) {
       addToast(err.message || 'Erro ao processar cadastro.', 'error');
     } finally {
@@ -175,15 +151,40 @@ export const SignupWizard: React.FC<{ onLogin: (user: any) => void }> = ({ onLog
     }
   };
 
+  const handleMercadoPagoRedirect = async () => {
+    setLoading(true);
+    try {
+      // Registrar temporariamente para ter um ID
+      const userId = `temp_${Date.now()}`;
+      const { checkoutUrl } = await createPremiumCheckout({
+        userId,
+        userEmail: formData.email,
+        userName: `${formData.firstName} ${formData.lastName}`,
+        userCPF: formData.cpf,
+        address: formData.address,
+        planType: 'monthly'
+      });
+      
+      // Salvar intenção de cadastro
+      localStorage.setItem('pending_signup', JSON.stringify(formData));
+      window.location.href = checkoutUrl;
+    } catch (error) {
+      addToast('Falha ao iniciar Mercado Pago', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="space-y-8 animate-fade-in-up max-w-2xl mx-auto">
-      {/* Progress Header */}
       <div className="flex items-center justify-between mb-12">
-        <StepIndicator active={currentStep === 'personal'} completed={['address', 'plan'].includes(currentStep)} icon={<UserIcon size={18} />} label="Perfil" />
-        <div className={`flex-1 h-1 mx-4 rounded-full transition-colors ${['address', 'plan'].includes(currentStep) ? 'bg-primary-500' : 'bg-gray-100'}`} />
-        <StepIndicator active={currentStep === 'address'} completed={currentStep === 'plan'} icon={<MapPin size={18} />} label="Endereço" />
-        <div className={`flex-1 h-1 mx-4 rounded-full transition-colors ${currentStep === 'plan' ? 'bg-primary-500' : 'bg-gray-100'}`} />
-        <StepIndicator active={currentStep === 'plan'} completed={false} icon={<CreditCard size={18} />} label="Plano" />
+        <StepIndicator active={currentStep === 'personal'} completed={['address', 'plan', 'payment'].includes(currentStep)} icon={<UserIcon size={18} />} label="Perfil" />
+        <div className={`flex-1 h-1 mx-4 rounded-full transition-colors ${['address', 'plan', 'payment'].includes(currentStep) ? 'bg-primary-500' : 'bg-gray-100'}`} />
+        <StepIndicator active={currentStep === 'address'} completed={['plan', 'payment'].includes(currentStep)} icon={<MapPin size={18} />} label="Endereço" />
+        <div className={`flex-1 h-1 mx-4 rounded-full transition-colors ${['plan', 'payment'].includes(currentStep) ? 'bg-primary-500' : 'bg-gray-100'}`} />
+        <StepIndicator active={currentStep === 'plan'} completed={currentStep === 'payment'} icon={<Sparkles size={18} />} label="Plano" />
+        <div className={`flex-1 h-1 mx-4 rounded-full transition-colors ${currentStep === 'payment' ? 'bg-primary-500' : 'bg-gray-100'}`} />
+        <StepIndicator active={currentStep === 'payment'} completed={false} icon={<CreditCard size={18} />} label="Pagamento" />
       </div>
 
       <Card className="p-8 md:p-12 rounded-[3rem] border-none shadow-2xl shadow-gray-200/50 bg-white">
@@ -208,22 +209,13 @@ export const SignupWizard: React.FC<{ onLogin: (user: any) => void }> = ({ onLog
 
               <div className="md:col-span-2 space-y-2">
                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">CPF</label>
-                <div className="relative">
-                  <ShieldCheck className={`absolute left-4 top-1/2 -translate-y-1/2 transition-colors ${errors.cpf ? 'text-rose-500' : 'text-gray-400'}`} size={18} />
-                  <input
-                    type="text"
-                    value={formData.cpf}
-                    onChange={(e) => {
-                      const val = formatCPF(e.target.value);
-                      setFormData({...formData, cpf: val});
-                      validateCPFUnique(val);
-                    }}
-                    maxLength={14}
-                    className={`w-full pl-12 pr-4 py-4 bg-gray-50 border rounded-2xl text-sm focus:ring-2 focus:ring-primary-500 outline-none transition-all ${errors.cpf ? 'border-rose-500 bg-rose-50/50' : 'border-gray-100'}`}
-                    placeholder="000.000.000-00"
-                  />
-                </div>
-                {errors.cpf && <p className="text-[10px] font-bold text-rose-500 ml-1">{errors.cpf}</p>}
+                <input
+                  type="text"
+                  value={formData.cpf}
+                  onChange={(e) => setFormData({...formData, cpf: formatCPF(e.target.value)})}
+                  className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm focus:ring-2 focus:ring-primary-500 outline-none"
+                  placeholder="000.000.000-00"
+                />
               </div>
 
               <div className="space-y-2">
@@ -247,18 +239,17 @@ export const SignupWizard: React.FC<{ onLogin: (user: any) => void }> = ({ onLog
               </div>
 
               <div className="md:col-span-2 space-y-2">
-                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Crie uma Senha</label>
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Senha</label>
                 <input
                   type="password"
                   value={formData.password}
                   onChange={(e) => setFormData({...formData, password: e.target.value})}
                   className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm focus:ring-2 focus:ring-primary-500 outline-none"
-                  placeholder="Mínimo 6 caracteres"
                 />
               </div>
             </div>
             <Button fullWidth size="lg" onClick={handlePersonalNext} className="py-5 shadow-xl shadow-primary-500/20">
-              Continuar Cadastro <ChevronRight className="ml-2" size={18} />
+              Continuar <ChevronRight className="ml-2" size={18} />
             </Button>
           </div>
         )}
@@ -267,17 +258,17 @@ export const SignupWizard: React.FC<{ onLogin: (user: any) => void }> = ({ onLog
           <div className="space-y-6 animate-fade-in-up">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="md:col-span-2">
-                <Input label="Rua / Avenida" value={formData.address.street} onChange={(val) => setFormData({...formData, address: {...formData.address, street: val}})} />
+                <Input label="Rua" value={formData.address.street} onChange={(val: string) => setFormData({...formData, address: {...formData.address, street: val}})} />
               </div>
-              <Input label="Número" value={formData.address.number} onChange={(val) => setFormData({...formData, address: {...formData.address, number: val}})} />
-              <Input label="CEP" value={formData.address.zipCode} onChange={(val) => setFormData({...formData, address: {...formData.address, zipCode: val}})} placeholder="00000-000" />
-              <Input label="Bairro" value={formData.address.neighborhood} onChange={(val) => setFormData({...formData, address: {...formData.address, neighborhood: val}})} />
-              <Input label="Cidade" value={formData.address.city} onChange={(val) => setFormData({...formData, address: {...formData.address, city: val}})} />
-              <Input label="Estado (UF)" value={formData.address.state} onChange={(val) => setFormData({...formData, address: {...formData.address, state: val.toUpperCase()}})} maxLength={2} />
+              <Input label="Número" value={formData.address.number} onChange={(val: string) => setFormData({...formData, address: {...formData.address, number: val}})} />
+              <Input label="CEP" value={formData.address.zipCode} onChange={(val: string) => setFormData({...formData, address: {...formData.address, zipCode: val}})} />
+              <Input label="Bairro" value={formData.address.neighborhood} onChange={(val: string) => setFormData({...formData, address: {...formData.address, neighborhood: val}})} />
+              <Input label="Cidade" value={formData.address.city} onChange={(val: string) => setFormData({...formData, address: {...formData.address, city: val}})} />
+              <Input label="Estado (UF)" value={formData.address.state} onChange={(val: string) => setFormData({...formData, address: {...formData.address, state: val.toUpperCase()}})} maxLength={2} />
             </div>
             <div className="flex gap-4 pt-4">
               <Button variant="ghost" onClick={() => setCurrentStep('personal')} className="flex-1">Voltar</Button>
-              <Button onClick={handleAddressNext} className="flex-[2] py-5 shadow-xl shadow-primary-500/20">Próxima Etapa</Button>
+              <Button onClick={handleAddressNext} className="flex-[2] py-5 shadow-xl shadow-primary-500/20">Ver Planos</Button>
             </div>
           </div>
         )}
@@ -285,43 +276,84 @@ export const SignupWizard: React.FC<{ onLogin: (user: any) => void }> = ({ onLog
         {currentStep === 'plan' && (
           <div className="space-y-8 animate-fade-in-up">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-              <div 
+              <PlanCard 
+                title="Plano Essencial"
+                price="Grátis"
+                active={formData.plan === PlanType.FREE}
                 onClick={() => setFormData({...formData, plan: PlanType.FREE})}
-                className={`p-6 rounded-[2rem] border-2 cursor-pointer transition-all ${formData.plan === PlanType.FREE ? 'border-primary-500 bg-primary-50' : 'border-gray-100 hover:border-gray-200'}`}
-              >
-                <h4 className="font-black text-gray-900">Plano Essencial</h4>
-                <p className="text-2xl font-black text-primary-600 mt-2">Grátis</p>
-                <p className="text-[10px] text-gray-400 uppercase tracking-widest mt-4">1 Conta • 1 Cartão • Dashboard Base</p>
-              </div>
-              <div 
+              />
+              <PlanCard 
+                title="Plano Premium"
+                price="R$ 19,90"
+                active={formData.plan === PlanType.PREMIUM}
                 onClick={() => setFormData({...formData, plan: PlanType.PREMIUM})}
-                className={`p-6 rounded-[2rem] border-2 cursor-pointer transition-all relative overflow-hidden ${formData.plan === PlanType.PREMIUM ? 'border-primary-500 bg-primary-50' : 'border-gray-100 hover:border-gray-200'}`}
-              >
-                <div className="absolute top-0 right-0 bg-primary-500 text-white text-[8px] font-black px-2 py-1 rounded-bl-lg">PRO</div>
-                <h4 className="font-black text-gray-900">Plano Premium</h4>
-                <p className="text-2xl font-black text-primary-600 mt-2">R$ 19,90<span className="text-xs font-normal text-gray-400">/mês</span></p>
-                <p className="text-[10px] text-gray-400 uppercase tracking-widest mt-4">IA • Ilimitado • Relatórios PDF</p>
-              </div>
+                isPro
+              />
             </div>
             <div className="flex gap-4">
               <Button variant="ghost" onClick={() => setCurrentStep('address')} className="flex-1">Voltar</Button>
-              <Button onClick={handleFinalSubmit} loading={loading} className="flex-[2] py-5 shadow-xl shadow-primary-500/20">
-                {formData.plan === PlanType.PREMIUM ? 'Ir para Pagamento' : 'Finalizar Cadastro'}
+              <Button onClick={handlePlanSelection} loading={loading} className="flex-[2] py-5 shadow-xl shadow-primary-500/20">
+                {formData.plan === PlanType.PREMIUM ? 'Prosseguir para Pagamento' : 'Finalizar Cadastro'}
               </Button>
             </div>
           </div>
         )}
 
-        <div className="mt-8 text-center border-t border-gray-50 pt-8">
-          <p className="text-sm text-gray-500 font-medium">
-            Já possui uma conta?{' '}
-            <button onClick={() => navigate('/login')} className="text-primary-600 font-black uppercase tracking-widest text-[10px] hover:underline">Faça Login</button>
-          </p>
-        </div>
+        {currentStep === 'payment' && (
+          <div className="space-y-8 animate-fade-in-up text-center">
+             <div className="space-y-2">
+                <h3 className="text-2xl font-black text-gray-900 tracking-tight">Quase lá! 🚀</h3>
+                <p className="text-sm text-gray-500">Escolha o seu método de pagamento preferido para ativar o Premium.</p>
+             </div>
+
+             <div className="space-y-6">
+                {/* PayPal Option */}
+                <div className="p-6 bg-gray-50 rounded-[2rem] border border-gray-100">
+                   <PayPalCheckoutButton 
+                      user={{...MOCK_USER, email: formData.email, first_name: formData.firstName} as User} 
+                      amount={19.90} 
+                   />
+                </div>
+
+                <div className="flex items-center gap-4 text-gray-300">
+                    <div className="flex-1 h-px bg-gray-100"></div>
+                    <span className="text-[10px] font-black uppercase">ou use Mercado Pago</span>
+                    <div className="flex-1 h-px bg-gray-100"></div>
+                </div>
+
+                <Button 
+                  fullWidth 
+                  onClick={handleMercadoPagoRedirect} 
+                  className="bg-[#009EE3] hover:bg-[#008CC9] border-none py-4 rounded-xl flex items-center justify-center gap-2"
+                >
+                  Pagar com Mercado Pago
+                </Button>
+             </div>
+
+             <button onClick={() => setCurrentStep('plan')} className="text-xs font-black text-gray-400 uppercase tracking-widest hover:text-primary-600">
+                Voltar aos Planos
+             </button>
+          </div>
+        )}
       </Card>
     </div>
   );
 };
+
+const PlanCard = ({ title, price, active, onClick, isPro }: any) => (
+  <div 
+    onClick={onClick}
+    className={`p-6 rounded-[2.5rem] border-2 cursor-pointer transition-all relative overflow-hidden ${active ? 'border-primary-500 bg-primary-50 shadow-inner' : 'border-gray-100 hover:border-gray-200 bg-white'}`}
+  >
+    {isPro && <div className="absolute top-0 right-0 bg-primary-500 text-white text-[8px] font-black px-3 py-1.5 rounded-bl-xl tracking-[0.2em] uppercase">Popular</div>}
+    <h4 className={`font-black text-sm uppercase tracking-widest ${active ? 'text-primary-700' : 'text-gray-400'}`}>{title}</h4>
+    <p className="text-3xl font-black text-gray-900 mt-2">{price}</p>
+    <div className="mt-4 space-y-2">
+        <div className="h-1 w-8 bg-gray-100 rounded-full"></div>
+        <p className="text-[9px] font-bold text-gray-400 uppercase leading-relaxed">{isPro ? 'IA • Ilimitado • Reports' : '1 Conta • 1 Cartão • Dashboard'}</p>
+    </div>
+  </div>
+);
 
 const StepIndicator = ({ active, completed, icon, label }: any) => (
   <div className="flex flex-col items-center gap-2">
