@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Modal } from '../components/ui/Modal';
+import { useToast } from '../components/ui/Toast';
 import { Plus, Edit2, Trash2, CheckCircle, Calendar, Lock, Crown, Lightbulb, Target } from 'lucide-react';
 import { Goal, User, PlanType, Transaction, TransactionType } from '../types';
 
@@ -12,6 +13,7 @@ interface GoalsProps {
 const EMOJI_OPTIONS = ['🏡', '🚗', '✈️', '💻', '🎓', '💪', '💍', '👶', '🎮', '📚', '🎵', '🐕', '⭐'];
 
 export const Goals: React.FC<GoalsProps> = ({ user }) => {
+    const { addToast } = useToast();
     const [goals, setGoals] = useState<Goal[]>([]);
     const [totalSavings, setTotalSavings] = useState(0);
 
@@ -47,7 +49,6 @@ export const Goals: React.FC<GoalsProps> = ({ user }) => {
         }
 
         // Calculate Savings from Transactions
-        // Logic: Sum of transactions with Category="Metas" AND Type="Recebimento"
         const storedTransactions = localStorage.getItem('financeapp_transactions');
         if (storedTransactions) {
             const transactions: Transaction[] = JSON.parse(storedTransactions);
@@ -63,12 +64,11 @@ export const Goals: React.FC<GoalsProps> = ({ user }) => {
         }
     }, [user.id]);
 
-    // Save Goals
-    useEffect(() => {
-        if (goals.length > 0) {
-            localStorage.setItem('financeapp_goals', JSON.stringify(goals));
-        }
-    }, [goals]);
+    // Save Goals - Fixed to persist even if goals array is empty
+    const saveGoals = (updatedGoals: Goal[]) => {
+        setGoals(updatedGoals);
+        localStorage.setItem('financeapp_goals', JSON.stringify(updatedGoals));
+    };
 
     // Helpers
     const resetForm = () => {
@@ -77,7 +77,6 @@ export const Goals: React.FC<GoalsProps> = ({ user }) => {
     };
 
     const handleOpenModal = (goal?: Goal) => {
-        // Free Plan Limit Check
         if (!goal && isFreePlan && goals.length >= 1) {
             setIsPremiumModalOpen(true);
             return;
@@ -99,7 +98,7 @@ export const Goals: React.FC<GoalsProps> = ({ user }) => {
 
     const handleSave = () => {
         if (!formData.name || !formData.target_amount) {
-            alert("Nome e Valor Alvo são obrigatórios.");
+            addToast("Nome e Valor Alvo são obrigatórios.", "error");
             return;
         }
 
@@ -108,26 +107,32 @@ export const Goals: React.FC<GoalsProps> = ({ user }) => {
             user_id: user.id,
             name: formData.name,
             target_amount: parseFloat(formData.target_amount.replace(',', '.')),
-            current_amount: 0, // Visual calculation uses totalSavings
+            current_amount: 0, 
             deadline: formData.deadline || undefined,
             icon: formData.icon,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString()
         };
 
+        let updatedGoals;
         if (editingId) {
-            setGoals(prev => prev.map(g => g.id === editingId ? { ...newGoal, created_at: g.created_at } : g));
+            updatedGoals = goals.map(g => g.id === editingId ? { ...newGoal, created_at: g.created_at } : g);
+            addToast("Meta atualizada!", "success");
         } else {
-            setGoals(prev => [...prev, newGoal]);
+            updatedGoals = [...goals, newGoal];
+            addToast("Meta criada com sucesso!", "success");
         }
 
+        saveGoals(updatedGoals);
         setIsModalOpen(false);
         resetForm();
     };
 
     const handleDelete = (id: string) => {
         if (window.confirm("Deseja remover esta meta?")) {
-            setGoals(prev => prev.filter(g => g.id !== id));
+            const updatedGoals = goals.filter(g => g.id !== id);
+            saveGoals(updatedGoals);
+            addToast("Meta removida.", "info");
         }
     };
 
@@ -159,7 +164,6 @@ export const Goals: React.FC<GoalsProps> = ({ user }) => {
                 </Button>
             </div>
 
-            {/* Free Plan Limit Alert */}
             {isFreePlan && (
                 <div className="bg-blue-50 border-l-4 border-blue-400 p-4 rounded-r flex items-center justify-between shadow-sm">
                     <div className="flex items-center">
@@ -175,7 +179,6 @@ export const Goals: React.FC<GoalsProps> = ({ user }) => {
                 </div>
             )}
 
-            {/* Info Note */}
             <div className="bg-amber-50 border border-amber-100 rounded-lg p-4 flex items-start gap-3 text-sm text-amber-800 shadow-sm">
                 <Lightbulb size={20} className="flex-shrink-0 mt-0.5 text-amber-600" />
                 <p>
@@ -187,14 +190,12 @@ export const Goals: React.FC<GoalsProps> = ({ user }) => {
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {goals.map((goal) => {
-                    // Logic: Total Savings Pool applied to THIS goal's target
                     const currentAmount = totalSavings; 
                     const percentage = Math.min(100, Math.round((currentAmount / goal.target_amount) * 100));
                     const isCompleted = percentage >= 100;
 
                     return (
                         <Card key={goal.id} className={`relative flex flex-col h-full border-t-4 ${isCompleted ? 'border-t-green-500' : 'border-t-primary-500'} hover:shadow-lg transition-all`}>
-                            {/* Actions - Always Visible for Better UX */}
                             <div className="absolute top-4 right-4 flex gap-2 z-10">
                                 <button 
                                     onClick={(e) => { e.stopPropagation(); handleOpenModal(goal); }}
@@ -212,7 +213,6 @@ export const Goals: React.FC<GoalsProps> = ({ user }) => {
                                 </button>
                             </div>
 
-                            {/* Header */}
                             <div className="flex items-start gap-4 mb-6">
                                 <div className="text-4xl bg-gray-50 p-4 rounded-2xl shadow-inner border border-gray-100">
                                     {goal.icon}
@@ -236,7 +236,6 @@ export const Goals: React.FC<GoalsProps> = ({ user }) => {
                                 </div>
                             </div>
 
-                            {/* Stats */}
                             <div className="mt-auto space-y-4">
                                 <div className="flex justify-between items-end border-b border-gray-100 pb-2">
                                     <div>
@@ -253,7 +252,6 @@ export const Goals: React.FC<GoalsProps> = ({ user }) => {
                                     </div>
                                 </div>
 
-                                {/* Progress Bar */}
                                 <div>
                                     <div className="flex mb-1.5 items-center justify-between">
                                         <span className="text-xs font-medium text-gray-500">Progresso</span>
@@ -289,7 +287,6 @@ export const Goals: React.FC<GoalsProps> = ({ user }) => {
                 )}
             </div>
 
-            {/* Create/Edit Modal */}
             <Modal 
                 isOpen={isModalOpen} 
                 onClose={() => setIsModalOpen(false)}
@@ -367,7 +364,6 @@ export const Goals: React.FC<GoalsProps> = ({ user }) => {
                 </div>
             </Modal>
 
-            {/* Premium Limit Modal */}
             <Modal
                 isOpen={isPremiumModalOpen}
                 onClose={() => setIsPremiumModalOpen(false)}

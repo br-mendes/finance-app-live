@@ -3,7 +3,8 @@ import { User } from '../types';
 // NOTE: In a production environment, this API Key should be stored in environment variables (process.env)
 // and these calls should happen server-side (e.g., Supabase Edge Functions or Node.js backend)
 // to prevent exposing the key to the client.
-const SENDGRID_API_KEY = import.meta.env?.VITE_SENDGRID_API_KEY || '';
+// Fix: Use process.env to avoid 'Property env does not exist on type ImportMeta' error
+const SENDGRID_API_KEY = process.env.VITE_SENDGRID_API_KEY || '';
 const SENDGRID_FROM_EMAIL = 'financeappbr@gmail.com'; // Must be a verified sender in SendGrid
 
 const sendEmail = async (to: string, subject: string, html: string) => {

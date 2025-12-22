@@ -1,26 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Modal } from '../components/ui/Modal';
+import { useToast } from '../components/ui/Toast';
 import { Plus, Edit2, Trash2, Building2, Wallet, Lock, Crown } from 'lucide-react';
 import { Account, AccountType, User, PlanType } from '../types';
+import { dataManager } from '../utils/dataManager';
 
 interface AccountsProps {
     user: User;
 }
-
-// Initial Mock Data
-const INITIAL_ACCOUNTS: Account[] = [
-    {
-        id: '1',
-        user_id: '123',
-        account_type: AccountType.CHECKING,
-        institution_name: 'Nubank',
-        balance: 1250.50,
-        updated_at: new Date().toISOString(),
-        created_at: new Date().toISOString()
-    }
-];
 
 const BANK_SUGGESTIONS = [
     "Nubank", "Itaú", "Bradesco", "Banco do Brasil", "Caixa", "Santander", 
@@ -36,7 +25,8 @@ const ACCOUNT_TYPE_LABELS: Record<AccountType, string> = {
 };
 
 export const Accounts: React.FC<AccountsProps> = ({ user }) => {
-    const [accounts, setAccounts] = useState<Account[]>(INITIAL_ACCOUNTS);
+    const { addToast } = useToast();
+    const [accounts, setAccounts] = useState<Account[]>([]);
     
     // Modal States
     const [isFormModalOpen, setIsFormModalOpen] = useState(false);
@@ -52,6 +42,26 @@ export const Accounts: React.FC<AccountsProps> = ({ user }) => {
     });
 
     const isFreePlan = user.plan === PlanType.FREE;
+
+    // Load Data
+    useEffect(() => {
+        const stored = dataManager.getAccounts();
+        if (stored.length > 0) {
+            setAccounts(stored);
+        } else {
+            const initial = [{
+                id: '1',
+                user_id: user.id,
+                account_type: AccountType.CHECKING,
+                institution_name: 'Nubank',
+                balance: 1250.50,
+                updated_at: new Date().toISOString(),
+                created_at: new Date().toISOString()
+            }];
+            setAccounts(initial);
+            localStorage.setItem('financeapp_accounts', JSON.stringify(initial));
+        }
+    }, [user.id]);
 
     // Helper: Reset Form
     const resetForm = () => {
@@ -87,13 +97,16 @@ export const Accounts: React.FC<AccountsProps> = ({ user }) => {
 
     // Helper: Save Form
     const handleSave = () => {
-        if (!formData.institution_name || !formData.balance) return; // Simple validation
+        if (!formData.institution_name || !formData.balance) {
+            addToast("Instituição e Saldo são obrigatórios.", "error");
+            return;
+        }
 
         const balanceNum = parseFloat(formData.balance.replace(',', '.'));
+        let updatedAccounts;
         
         if (editingAccount) {
-            // Update existing
-            setAccounts(prev => prev.map(acc => 
+            updatedAccounts = accounts.map(acc => 
                 acc.id === editingAccount.id 
                 ? { 
                     ...acc, 
@@ -103,9 +116,9 @@ export const Accounts: React.FC<AccountsProps> = ({ user }) => {
                     updated_at: new Date(formData.updated_at).toISOString() 
                   } 
                 : acc
-            ));
+            );
+            addToast("Conta atualizada com sucesso!", "success");
         } else {
-            // Create new
             const newAccount: Account = {
                 id: Date.now().toString(),
                 user_id: user.id,
@@ -115,9 +128,12 @@ export const Accounts: React.FC<AccountsProps> = ({ user }) => {
                 updated_at: new Date(formData.updated_at).toISOString(),
                 created_at: new Date().toISOString()
             };
-            setAccounts(prev => [...prev, newAccount]);
+            updatedAccounts = [...accounts, newAccount];
+            addToast("Conta cadastrada com sucesso!", "success");
         }
 
+        setAccounts(updatedAccounts);
+        localStorage.setItem('financeapp_accounts', JSON.stringify(updatedAccounts));
         setIsFormModalOpen(false);
         resetForm();
     };
@@ -125,7 +141,10 @@ export const Accounts: React.FC<AccountsProps> = ({ user }) => {
     // Helper: Delete
     const handleDelete = (id: string) => {
         if (window.confirm("Tem certeza que deseja remover esta conta?")) {
-            setAccounts(prev => prev.filter(a => a.id !== id));
+            const updated = accounts.filter(a => a.id !== id);
+            setAccounts(updated);
+            localStorage.setItem('financeapp_accounts', JSON.stringify(updated));
+            addToast("Conta removida com sucesso.", "info");
         }
     };
 
@@ -156,7 +175,6 @@ export const Accounts: React.FC<AccountsProps> = ({ user }) => {
                 </Button>
             </div>
 
-            {/* Plan Usage Banner (Visible only for Free users) */}
             {isFreePlan && (
                 <div className="bg-blue-50 border-l-4 border-blue-400 p-4 rounded-r flex items-center justify-between">
                     <div className="flex items-center">
@@ -178,16 +196,16 @@ export const Accounts: React.FC<AccountsProps> = ({ user }) => {
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                 {accounts.map((account) => (
                     <Card key={account.id} className="relative group hover:shadow-md transition-shadow">
-                        <div className="absolute top-4 right-4 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity flex gap-2">
+                        <div className="absolute top-4 right-4 opacity-100 flex gap-2 z-10">
                              <button 
-                                onClick={() => handleOpenForm(account)}
+                                onClick={(e) => { e.stopPropagation(); handleOpenForm(account); }}
                                 className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
                                 title="Editar"
                              >
                                 <Edit2 size={16} />
                              </button>
                              <button 
-                                onClick={() => handleDelete(account.id)}
+                                onClick={(e) => { e.stopPropagation(); handleDelete(account.id); }}
                                 className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
                                 title="Deletar"
                              >
@@ -218,7 +236,6 @@ export const Accounts: React.FC<AccountsProps> = ({ user }) => {
                     </Card>
                 ))}
 
-                {/* Add New Card Placeholder (if list is empty) */}
                 {accounts.length === 0 && (
                     <button 
                         onClick={() => handleOpenForm()}
@@ -232,7 +249,6 @@ export const Accounts: React.FC<AccountsProps> = ({ user }) => {
                 )}
             </div>
 
-            {/* Account Form Modal */}
             <Modal
                 isOpen={isFormModalOpen}
                 onClose={() => setIsFormModalOpen(false)}
@@ -299,7 +315,6 @@ export const Accounts: React.FC<AccountsProps> = ({ user }) => {
                 </div>
             </Modal>
 
-            {/* Premium Limit Modal */}
             <Modal
                 isOpen={isPremiumModalOpen}
                 onClose={() => setIsPremiumModalOpen(false)}

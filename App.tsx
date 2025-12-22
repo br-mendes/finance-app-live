@@ -1,9 +1,19 @@
 import React, { useState, useEffect, Suspense } from 'react';
-import { HashRouter as Router, Routes, Route, Navigate, Link } from 'react-router-dom';
+import { HashRouter as Router, Routes, Route, Navigate, Link, useLocation } from 'react-router-dom';
 import { Layout } from './components/Layout';
 import { AdminLayout } from './components/AdminLayout';
 import { ToastProvider, useToast } from './components/ui/Toast';
 import { User } from './types';
+import { Footer } from './components/Footer';
+
+// Helper para garantir que a página role para o topo ao navegar
+const ScrollToTop = () => {
+  const { pathname } = useLocation();
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [pathname]);
+  return null;
+};
 
 // Helper for lazy loading named exports
 function lazyImport<T extends React.ComponentType<any>>(factory: () => Promise<{ [name: string]: T }>, name: string): React.LazyExoticComponent<T> {
@@ -59,6 +69,27 @@ const OfflineMonitor = () => {
     return null;
 };
 
+// Public Wrapper for pages when guest
+const PublicPageWrapper = ({ children }: { children: React.ReactNode }) => (
+    <div className="min-h-screen flex flex-col bg-white">
+        <header className="py-4 px-6 border-b border-gray-100 flex justify-between items-center sticky top-0 bg-white/95 backdrop-blur-md z-50">
+            <div className="flex items-center gap-8">
+                <Link to="/">
+                    <img src="https://i.ibb.co/9mt6zRFj/generated-image-removebg-preview.png" alt="FinanceAPP" className="h-10 w-auto hover:opacity-90 transition-opacity" />
+                </Link>
+                <nav className="hidden md:flex items-center gap-6 text-sm font-medium text-gray-600">
+                    <Link to="/about" className="hover:text-primary-600 transition-colors">Sobre</Link>
+                    <Link to="/plans" className="hover:text-primary-600 transition-colors">Planos</Link>
+                    <Link to="/contact" className="hover:text-primary-600 transition-colors">Contato</Link>
+                </nav>
+            </div>
+            <Link to="/login" className="bg-primary-600 text-white px-5 py-2.5 rounded-xl text-sm font-bold hover:bg-primary-700 transition-all shadow-lg shadow-primary-500/20 active:scale-95">Entrar</Link>
+        </header>
+        <div className="flex-1">{children}</div>
+        <Footer />
+    </div>
+);
+
 function App() {
   const [user, setUser] = useState<User | null>(null);
   const [initializing, setInitializing] = useState(true);
@@ -89,6 +120,7 @@ function App() {
     <ToastProvider>
       <OfflineMonitor />
       <Router>
+        <ScrollToTop />
         <Suspense fallback={<PageLoader />}>
           <Routes>
             <Route path="/login" element={
@@ -118,9 +150,9 @@ function App() {
                         <About />
                     </Layout>
                  ) : (
-                     <div className="min-h-screen bg-white">
-                        <Landing />
-                     </div>
+                    <PublicPageWrapper>
+                        <About />
+                    </PublicPageWrapper>
                  )
             } />
 
@@ -130,15 +162,9 @@ function App() {
                         <Plans />
                     </Layout>
                 ) : (
-                    <div className="min-h-screen flex flex-col">
-                         <header className="py-4 px-6 border-b border-gray-100 flex justify-between items-center">
-                            <Link to="/">
-                                <img src="https://i.ibb.co/9mt6zRFj/generated-image-removebg-preview.png" alt="FinanceAPP" className="h-10 w-auto hover:opacity-90 transition-opacity" />
-                            </Link>
-                            <Link to="/login" className="text-primary-600 font-medium hover:underline">Entrar</Link>
-                         </header>
-                         <div className="flex-1 p-4"><Plans /></div>
-                    </div>
+                    <PublicPageWrapper>
+                        <Plans />
+                    </PublicPageWrapper>
                 )
             } />
 
@@ -148,15 +174,9 @@ function App() {
                         <Contact />
                     </Layout>
                 ) : (
-                    <div className="min-h-screen flex flex-col">
-                         <header className="py-4 px-6 border-b border-gray-100 flex justify-between items-center">
-                            <Link to="/">
-                                <img src="https://i.ibb.co/9mt6zRFj/generated-image-removebg-preview.png" alt="FinanceAPP" className="h-10 w-auto hover:opacity-90 transition-opacity" />
-                            </Link>
-                            <Link to="/login" className="text-primary-600 font-medium hover:underline">Entrar</Link>
-                         </header>
-                         <div className="flex-1 p-4"><Contact /></div>
-                    </div>
+                    <PublicPageWrapper>
+                        <Contact />
+                    </PublicPageWrapper>
                 )
             } />
             

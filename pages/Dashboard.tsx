@@ -1,328 +1,249 @@
-import React, { useState, useEffect } from 'react';
-import { Card } from '../components/ui/Card';
-import { TrendingUp, TrendingDown, DollarSign, CreditCard, Info, AlertTriangle, CheckCircle } from 'lucide-react';
-import { 
-    BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, 
-    PieChart, Pie, Legend, LineChart, Line 
-} from 'recharts';
-import { dataManager } from '../utils/dataManager';
-import { TransactionType } from '../types';
 
-const COLORS = ['#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#6366f1', '#ec4899', '#84cc16'];
+import React, { useState, useEffect } from 'react';
+// Added useNavigate import to resolve the missing 'navigate' name error.
+import { useNavigate } from 'react-router-dom';
+import { Card } from '../components/ui/Card';
+import { Button } from '../components/ui/Button';
+import { 
+    RefreshCw, Sparkles, Lightbulb, ChevronRight, BrainCircuit, 
+    TrendingUp, ShieldCheck, Target, Zap, ArrowUpRight
+} from 'lucide-react';
+import { useAuth } from '../hooks/useAuth';
+import { PlanType } from '../types';
+import { 
+    calculateDashboardMetrics, 
+    FinancialMetrics 
+} from '../services/financialCalculations';
+import { generateFinancialInsights, FinancialInsights } from '../services/gemini/insights';
+import { DashboardCards } from '../components/dashboard/DashboardCards';
+import { FinancialHealth } from '../components/dashboard/FinancialHealth';
 
 export const Dashboard: React.FC = () => {
-  const [dateFilter, setDateFilter] = useState('30');
-  
-  // Real Data State
-  const [stats, setStats] = useState({
-      totalBalance: 0,
-      totalLimit: 0, // Total available limit
-      monthlyIncome: 0,
-      monthlyExpenses: 0
-  });
+  const { user } = useAuth();
+  // Initialized the navigate function using the useNavigate hook.
+  const navigate = useNavigate();
+  const [metrics, setMetrics] = useState<FinancialMetrics | null>(null);
+  const [aiInsights, setAiInsights] = useState<FinancialInsights | null>(null);
+  const [loadingAi, setLoadingAi] = useState(false);
+  const isPremium = user?.plan === PlanType.PREMIUM;
 
-  const [dataPie, setDataPie] = useState<{name: string, value: number}[]>([]);
-  const [dataBar, setDataBar] = useState<{name: string, value: number}[]>([]);
-  const [dataLine, setDataLine] = useState<{day: string, atual: number, anterior: number}[]>([]);
-  const [healthStatus, setHealthStatus] = useState<'healthy' | 'attention' | 'critical'>('healthy');
-
-  useEffect(() => {
-      // Load Data
-      const transactions = dataManager.getTransactions();
-      const accounts = dataManager.getAccounts();
-      const cards = dataManager.getCards();
-
-      // 1. Stats
-      const totalBalance = accounts.reduce((sum, acc) => sum + acc.balance, 0);
-      const totalLimit = cards.reduce((sum, c) => sum + c.limit_amount, 0); // available
-      
-      const now = new Date();
-      const currentMonth = now.getMonth();
-      const currentYear = now.getFullYear();
-
-      const monthlyTrans = transactions.filter(t => {
-          const d = new Date(t.date);
-          return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
-      });
-
-      const monthlyIncome = monthlyTrans
-          .filter(t => t.type === TransactionType.RECEIVE)
-          .reduce((sum, t) => sum + t.amount, 0);
-
-      const monthlyExpenses = monthlyTrans
-          .filter(t => t.type === TransactionType.DEBIT || t.type === TransactionType.CREDIT)
-          .reduce((sum, t) => sum + t.amount, 0);
-
-      setStats({ totalBalance, totalLimit, monthlyIncome, monthlyExpenses });
-
-      // 2. Health Logic
-      // Ratio of Expenses/Income
-      // Or Credit Limit usage? We only know available limit.
-      // Simple logic: Expense > Income = Critical. Expense > 80% Income = Attention.
-      if (monthlyExpenses > monthlyIncome && monthlyIncome > 0) {
-          setHealthStatus('critical');
-      } else if (monthlyExpenses > monthlyIncome * 0.8) {
-          setHealthStatus('attention');
-      } else {
-          setHealthStatus('healthy');
-      }
-
-      // 3. Charts Data (Based on Date Filter)
-      const days = parseInt(dateFilter);
-      const cutoffDate = new Date();
-      cutoffDate.setDate(cutoffDate.getDate() - days);
-
-      const periodTrans = transactions.filter(t => new Date(t.date) >= cutoffDate);
-
-      // Pie Chart (Categories)
-      const catMap = new Map<string, number>();
-      periodTrans.filter(t => t.type === TransactionType.DEBIT || t.type === TransactionType.CREDIT).forEach(t => {
-          catMap.set(t.category, (catMap.get(t.category) || 0) + t.amount);
-      });
-      const pieData = Array.from(catMap.entries()).map(([name, value]) => ({ name, value }));
-      setDataPie(pieData);
-
-      // Bar Chart (Types)
-      const typeMap = { [TransactionType.DEBIT]: 0, [TransactionType.CREDIT]: 0, [TransactionType.RECEIVE]: 0 };
-      periodTrans.forEach(t => {
-          typeMap[t.type] += t.amount;
-      });
-      setDataBar([
-          { name: 'Débito', value: typeMap[TransactionType.DEBIT] },
-          { name: 'Crédito', value: typeMap[TransactionType.CREDIT] },
-          { name: 'Receita', value: typeMap[TransactionType.RECEIVE] },
-      ]);
-
-      // Line Chart (Daily Evolution)
-      // Group by day for the last 'days'
-      // Simplified: Just 7 days or so for visualization? No, use full period.
-      // If 30 days, too many points. Group by chunks?
-      // Let's do simple daily grouping for the filtered period.
-      const lineMap = new Map<string, number>();
-      periodTrans.filter(t => t.type === TransactionType.DEBIT || t.type === TransactionType.CREDIT).forEach(t => {
-          const d = new Date(t.date).toLocaleDateString('pt-BR', {day: '2-digit', month: '2-digit'});
-          lineMap.set(d, (lineMap.get(d) || 0) + t.amount);
-      });
-      const lineData = Array.from(lineMap.entries())
-        .map(([day, atual]) => ({ day, atual, anterior: 0 }))
-        .sort((a,b) => a.day.localeCompare(b.day)) // approximate sort
-        .slice(-10); // Show last 10 points to avoid crowding
-      setDataLine(lineData);
-
-  }, [dateFilter]);
-
-  const getHealthBadge = () => {
-      switch(healthStatus) {
-          case 'healthy':
-              return { 
-                  color: 'bg-green-100 text-green-800', 
-                  dot: 'bg-green-500', 
-                  text: 'Saudável',
-                  icon: <CheckCircle size={20} className="text-green-600 mb-2" />,
-                  tip: "Parabéns! Suas receitas superam suas despesas."
-              };
-          case 'attention':
-              return { 
-                  color: 'bg-yellow-100 text-yellow-800', 
-                  dot: 'bg-yellow-500', 
-                  text: 'Atenção',
-                  icon: <AlertTriangle size={20} className="text-yellow-600 mb-2" />,
-                  tip: "Cuidado, seus gastos estão próximos da sua renda."
-              };
-          case 'critical':
-              return { 
-                  color: 'bg-red-100 text-red-800', 
-                  dot: 'bg-red-500', 
-                  text: 'Crítico',
-                  icon: <AlertTriangle size={20} className="text-red-600 mb-2" />,
-                  tip: "Suas despesas superaram a renda. Reveja seu orçamento urgente."
-              };
-          default:
-              return { color: 'bg-gray-100 text-gray-800', dot: 'bg-gray-500', text: 'Analisando...', icon: null, tip: '' };
-      }
+  const loadBaseMetrics = async () => {
+    if (!user?.id) return;
+    try {
+        const m = await calculateDashboardMetrics(user.id);
+        setMetrics(m);
+        // Only auto-trigger AI for Premium users
+        if (isPremium && m && !aiInsights) {
+            handleAiInsights(m);
+        }
+    } catch (err) {
+        console.error("Dashboard Metrics Error:", err);
+    }
   };
 
-  const status = getHealthBadge();
+  const handleAiInsights = async (m: FinancialMetrics) => {
+    if (loadingAi) return;
+    setLoadingAi(true);
+    try {
+        const insights = await generateFinancialInsights({
+            name: user?.first_name || 'Usuário',
+            plan: user?.plan || 'free',
+            monthlyIncome: m.monthlyIncome,
+            monthlyExpenses: m.monthlyExpenses,
+            totalBalance: m.totalBalance,
+            totalCreditLimit: m.totalCreditLimit,
+            savingsRate: m.savingsRate,
+            creditUtilization: m.creditUtilization,
+            topCategories: [], 
+            goals: []
+        });
+        setAiInsights(insights);
+    } catch (e) {
+        console.error("AI Insight Error:", e);
+    } finally {
+        setLoadingAi(false);
+    }
+  };
+
+  useEffect(() => {
+    loadBaseMetrics();
+  }, [user?.id]);
 
   return (
-    <div className="space-y-6 animate-fade-in-up">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div className="space-y-8 animate-fade-in-up max-w-7xl mx-auto pb-20">
+      {/* Header com Saudação Dinâmica */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Painel Geral</h1>
-          <p className="text-sm text-gray-500">Visão completa da sua saúde financeira</p>
-        </div>
-        <div className="flex items-center gap-2">
-            <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${status.color}`}>
-                <span className={`w-2 h-2 ${status.dot} rounded-full mr-2`}></span>
-                Saúde Financeira: {status.text}
-            </span>
-        </div>
-      </div>
-
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="border-l-4 border-l-blue-500">
-          <div className="flex items-start justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-500">Saldo em Contas</p>
-              <h3 className="text-2xl font-bold text-gray-900 mt-1">
-                 {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(stats.totalBalance)}
-              </h3>
-            </div>
-            <div className="p-2 bg-blue-50 rounded-lg text-blue-600">
-              <DollarSign size={20} />
-            </div>
-          </div>
-        </Card>
-
-        <Card className="border-l-4 border-l-purple-500">
-          <div className="flex items-start justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-500">Limite Disponível</p>
-              <h3 className="text-2xl font-bold text-gray-900 mt-1">
-                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(stats.totalLimit)}
-              </h3>
-            </div>
-            <div className="p-2 bg-purple-50 rounded-lg text-purple-600">
-              <CreditCard size={20} />
-            </div>
-          </div>
-        </Card>
-
-        <Card className="border-l-4 border-l-green-500">
-          <div className="flex items-start justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-500">Receitas (Mês)</p>
-              <h3 className="text-2xl font-bold text-green-600 mt-1">
-                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(stats.monthlyIncome)}
-              </h3>
-            </div>
-            <div className="p-2 bg-green-50 rounded-lg text-green-600">
-              <TrendingUp size={20} />
-            </div>
-          </div>
-        </Card>
-
-        <Card className="border-l-4 border-l-red-500">
-          <div className="flex items-start justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-500">Despesas (Mês)</p>
-              <h3 className="text-2xl font-bold text-red-600 mt-1">
-                 {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(stats.monthlyExpenses)}
-              </h3>
-            </div>
-            <div className="p-2 bg-red-50 rounded-lg text-red-600">
-              <TrendingDown size={20} />
-            </div>
-          </div>
-        </Card>
-      </div>
-
-      {/* Health Tip Section */}
-      <Card className={`${status.color.replace('text-', 'bg-').replace('800', '50')} border-none`}>
-          <div className="flex items-start gap-3">
-              <div className="mt-1">{status.icon}</div>
-              <div>
-                  <h4 className="font-bold text-gray-900">Análise de Saúde Financeira</h4>
-                  <p className="text-sm text-gray-700 mt-1">{status.tip}</p>
-              </div>
-          </div>
-      </Card>
-
-      {/* Charts Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Category Pie Chart */}
-        <Card>
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="text-lg font-semibold text-gray-900">Gastos por Categoria</h3>
-            <select 
-                value={dateFilter}
-                onChange={(e) => setDateFilter(e.target.value)}
-                className="text-sm border-gray-300 rounded-md shadow-sm focus:border-primary-300 focus:ring focus:ring-primary-200 focus:ring-opacity-50"
-            >
-                <option value="7">Últimos 7 dias</option>
-                <option value="15">Últimos 15 dias</option>
-                <option value="30">Últimos 30 dias</option>
-                <option value="90">Últimos 90 dias</option>
-            </select>
-          </div>
-          <div className="h-72">
-             {dataPie.length > 0 ? (
-                <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                    <Pie
-                    data={dataPie}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={60}
-                    outerRadius={100}
-                    paddingAngle={5}
-                    dataKey="value"
-                    >
-                    {dataPie.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                    </Pie>
-                    <Tooltip formatter={(value) => `R$ ${value}`} />
-                    <Legend layout="vertical" verticalAlign="middle" align="right" />
-                </PieChart>
-                </ResponsiveContainer>
-             ) : (
-                 <div className="h-full flex items-center justify-center text-gray-400">Sem dados para o período</div>
+          <div className="flex items-center gap-2 mb-1">
+             <h1 className="text-3xl font-black text-gray-900 tracking-tight">Painel de Controle</h1>
+             {isPremium && (
+                 <span className="bg-amber-100 text-amber-700 text-[10px] font-black px-2 py-0.5 rounded-full uppercase border border-amber-200">Pro</span>
              )}
           </div>
-        </Card>
+          <p className="text-sm text-gray-500 font-medium">Bom ver você de novo, {user?.first_name}!</p>
+        </div>
+        <div className="flex items-center gap-3">
+           <Button variant="outline" size="sm" onClick={loadBaseMetrics} className="h-11 glass border-gray-200 shadow-sm">
+              <RefreshCw size={16} className="mr-2" /> Sincronizar
+           </Button>
+           {isPremium && (
+                <Button size="sm" onClick={() => metrics && handleAiInsights(metrics)} loading={loadingAi} className="h-11 bg-primary-600 shadow-lg shadow-primary-500/20">
+                    <Sparkles size={16} className="mr-2" /> Advisor IA
+                </Button>
+           )}
+        </div>
+      </div>
 
-        {/* Expenses by Type Bar Chart */}
-        <Card>
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="text-lg font-semibold text-gray-900">Gastos por Tipo</h3>
-          </div>
-          <div className="h-72">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={dataBar} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="name" axisLine={false} tickLine={false} />
-                <YAxis axisLine={false} tickLine={false} />
-                <Tooltip 
-                    cursor={{fill: '#f3f4f6'}}
-                    contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                    formatter={(value) => `R$ ${value}`}
-                />
-                <Bar dataKey="value" radius={[4, 4, 0, 0]}>
-                  {dataBar.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={index === 0 ? '#ef4444' : index === 1 ? '#f59e0b' : '#10b981'} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </Card>
+      {/* Main Stats Row */}
+      <DashboardCards />
 
-        {/* Monthly Comparison Line Chart */}
-        <Card className="lg:col-span-2">
-            <div className="flex items-center justify-between mb-6">
-                <div>
-                    <h3 className="text-lg font-semibold text-gray-900">Evolução Diária</h3>
-                    <p className="text-xs text-gray-500">Últimos lançamentos</p>
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        {/* Left Column: Health & Charts (Col 8) */}
+        <div className="lg:col-span-8 space-y-8">
+          <FinancialHealth />
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <Card className="p-8 hover:shadow-md transition-all group overflow-hidden relative">
+                <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:scale-110 transition-transform">
+                    <TrendingUp size={80} />
                 </div>
-            </div>
-            <div className="h-80">
-                {dataLine.length > 0 ? (
-                    <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={dataLine} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                        <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{fill: '#9ca3af'}} />
-                        <YAxis axisLine={false} tickLine={false} tick={{fill: '#9ca3af'}} />
-                        <Tooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
-                        <Line type="monotone" dataKey="atual" stroke="#0ea5e9" strokeWidth={3} dot={{r: 4}} activeDot={{r: 6}} name="Valor" />
-                    </LineChart>
-                    </ResponsiveContainer>
-                ) : (
-                    <div className="h-full flex items-center justify-center text-gray-400">Sem dados suficientes</div>
+                <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4">Investimentos</h4>
+                <div className="space-y-4">
+                    <p className="text-gray-500 text-sm">Acompanhe seu rendimento passivo e evolução de carteira.</p>
+                    <div className="pt-2">
+                        <span className="text-2xl font-black text-gray-900">R$ 0,00</span>
+                    </div>
+                </div>
+                <div className="mt-6 flex justify-end">
+                    <button className="text-primary-600 font-bold text-xs flex items-center gap-1 hover:gap-2 transition-all">
+                        Configurar Carteira <ArrowUpRight size={14} />
+                    </button>
+                </div>
+            </Card>
+
+            <Card className="p-8 hover:shadow-md transition-all group overflow-hidden relative border-dashed bg-gray-50/50">
+                <div className="absolute top-0 right-0 p-4 opacity-5">
+                    <Zap size={80} />
+                </div>
+                <div className="flex flex-col items-center justify-center py-4 text-center">
+                    <div className="w-12 h-12 bg-white rounded-2xl shadow-sm flex items-center justify-center mb-4 text-gray-300">
+                        <BrainCircuit size={24} />
+                    </div>
+                    <p className="text-xs font-black text-gray-400 uppercase tracking-widest">Gráficos Avançados</p>
+                    <p className="text-xs text-gray-400 mt-2">Disponível em breve para usuários Pro.</p>
+                </div>
+            </Card>
+          </div>
+        </div>
+
+        {/* Right Column: AI Advisor (Col 4) */}
+        <div className="lg:col-span-4 flex flex-col h-full">
+          {isPremium ? (
+             <Card className="bg-gradient-to-br from-gray-900 via-indigo-950 to-black text-white border-none shadow-2xl h-full p-0 overflow-hidden group flex flex-col">
+                <div className="p-8 flex-1 flex flex-col">
+                  <div className="flex items-center justify-between mb-10">
+                      <div className="flex items-center gap-3">
+                          <div className="p-3 bg-white/10 rounded-2xl backdrop-blur-md border border-white/20 shadow-inner">
+                              <Sparkles size={24} className="text-amber-400" />
+                          </div>
+                          <div>
+                            <h3 className="font-bold text-lg leading-tight tracking-tight">Consultoria Pro</h3>
+                            <p className="text-[10px] text-primary-300 uppercase tracking-widest font-black">Powered by Gemini 3</p>
+                          </div>
+                      </div>
+                      <button 
+                        onClick={() => metrics && handleAiInsights(metrics)} 
+                        disabled={loadingAi}
+                        className="p-2.5 bg-white/5 hover:bg-white/15 rounded-xl transition-all border border-white/10"
+                        title="Nova Análise"
+                      >
+                          <RefreshCw size={18} className={`${loadingAi ? "animate-spin" : ""} text-white/60`} />
+                      </button>
+                  </div>
+
+                  {loadingAi ? (
+                      <div className="flex-1 flex flex-col items-center justify-center space-y-6">
+                          <div className="relative">
+                            <div className="w-16 h-16 border-4 border-primary-500/20 border-t-primary-500 rounded-full animate-spin"></div>
+                            <Sparkles className="absolute inset-0 m-auto text-primary-400 animate-pulse" size={24} />
+                          </div>
+                          <div className="text-center">
+                            <p className="text-sm text-primary-100 font-bold tracking-wide">Processando Padrões</p>
+                            <p className="text-[10px] text-white/40 uppercase mt-1">Analisando fluxo de caixa...</p>
+                          </div>
+                      </div>
+                  ) : aiInsights ? (
+                      <div className="space-y-8 flex-1 flex flex-col">
+                          <div className="bg-white/5 p-6 rounded-[2rem] border border-white/10 backdrop-blur-sm shadow-inner">
+                            <p className="text-white leading-relaxed text-sm font-medium italic opacity-90">
+                                "{aiInsights.summary}"
+                            </p>
+                          </div>
+                          
+                          <div className="space-y-5">
+                              <div className="flex items-center justify-between border-b border-white/10 pb-2">
+                                <h4 className="text-[10px] font-black uppercase text-amber-400 tracking-[0.2em]">Insights Estratégicos</h4>
+                                <span className="text-[10px] font-bold text-white/30">Health Score: {aiInsights.financialScore}/100</span>
+                              </div>
+                              <ul className="space-y-4">
+                                  {aiInsights.insights.map((item, i) => (
+                                      <li key={i} className="text-xs flex items-start gap-4 text-white/80 leading-relaxed">
+                                          <div className="mt-1 w-1.5 h-1.5 rounded-full bg-primary-500 shrink-0 shadow-[0_0_8px_rgba(14,165,233,0.8)]"></div>
+                                          {item}
+                                      </li>
+                                  ))}
+                              </ul>
+                          </div>
+
+                          <div className="mt-auto pt-8 border-t border-white/10">
+                              <div className="flex items-center gap-2 text-[10px] font-black text-amber-400 uppercase tracking-widest mb-3">
+                                  <Lightbulb size={12} />
+                                  Action Plan
+                              </div>
+                              <div className="space-y-3">
+                                  {aiInsights.recommendations.map((rec, i) => (
+                                      <div key={i} className="bg-white/5 px-4 py-3 rounded-xl border border-white/5 text-[11px] font-bold flex items-center justify-between group/rec hover:bg-white/10 transition-colors">
+                                          <span className="text-white/90">{rec}</span>
+                                          <ChevronRight size={14} className="text-white/20 group-hover/rec:text-amber-400 transition-colors" />
+                                      </div>
+                                  ))}
+                              </div>
+                          </div>
+                      </div>
+                  ) : (
+                      <div className="flex-1 flex flex-col items-center justify-center text-center px-6">
+                          <div className="w-16 h-16 bg-white/5 rounded-3xl flex items-center justify-center mb-6 border border-white/10">
+                             <Zap size={32} className="text-amber-400 opacity-40" />
+                          </div>
+                          <h4 className="text-lg font-bold text-white mb-2">Pronto para a análise?</h4>
+                          <p className="text-xs text-white/50 mb-8 leading-relaxed">Clique no botão abaixo para gerar uma análise profunda da sua saúde financeira atual.</p>
+                          <Button onClick={() => metrics && handleAiInsights(metrics)} variant="secondary" className="w-full bg-white text-black border-none hover:bg-gray-100 font-black py-4">
+                            Gerar Relatório IA
+                          </Button>
+                      </div>
+                  )}
+                </div>
+                
+                {aiInsights && (
+                    <div className="px-8 py-4 bg-white/5 border-t border-white/10 flex justify-between items-center">
+                        <div className="flex items-center gap-1.5 text-[9px] font-bold text-white/30 uppercase tracking-widest">
+                            <ShieldCheck size={12} className="text-emerald-500" /> Criptografia Ponta a Ponta
+                        </div>
+                        <span className="text-[9px] text-white/20">{new Date(aiInsights.generatedAt).toLocaleTimeString()}</span>
+                    </div>
                 )}
-            </div>
-        </Card>
+             </Card>
+          ) : (
+             <Card className="bg-white border-2 border-dashed border-gray-200 h-full flex flex-col items-center justify-center text-center p-12 rounded-[2.5rem]">
+                <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mb-8 shadow-inner ring-8 ring-gray-50/50">
+                    <Sparkles size={40} className="text-gray-300" />
+                </div>
+                <h3 className="text-xl font-black text-gray-900 mb-3 tracking-tight">Advisor IA Financeiro</h3>
+                <p className="text-sm text-gray-500 mb-10 max-w-[240px] leading-relaxed">Tenha um analista financeiro particular baseado no <span className="text-primary-600 font-bold">Gemini 3</span> cuidando do seu dinheiro 24h por dia.</p>
+                <Button className="w-full bg-primary-600 py-4 text-sm font-black shadow-xl shadow-primary-500/20" onClick={() => navigate('/plans')}>Assinar Premium Agora</Button>
+             </Card>
+          )}
+        </div>
       </div>
     </div>
   );

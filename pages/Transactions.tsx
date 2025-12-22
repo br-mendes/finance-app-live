@@ -614,7 +614,8 @@ export const Transactions: React.FC<TransactionsProps> = ({ user }) => {
                                                 value={formData.installmentsCount}
                                                 onChange={(e) => setFormData({...formData, installmentsCount: parseInt(e.target.value)})}
                                             >
-                                                {[2,3,4,5,6,7,8,9,10,11,12].map(n => (
+                                                {/* Range increased to 24x */}
+                                                {Array.from({ length: 23 }, (_, i) => i + 2).map(n => (
                                                     <option key={n} value={n}>{n}x</option>
                                                 ))}
                                             </select>

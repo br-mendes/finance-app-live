@@ -3,13 +3,14 @@ import { useNavigate } from 'react-router-dom';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Modal } from '../components/ui/Modal';
+import { useToast } from '../components/ui/Toast';
 import { User, PlanType } from '../types';
 import { paymentService } from '../services/paymentService';
 import { ADMIN_EMAIL, PERMANENT_PREMIUM_EMAIL } from '../constants';
 import { 
     User as UserIcon, Shield, CreditCard, AlertTriangle, Save, 
     Upload, Eye, EyeOff, Check, X, Smartphone, BarChart3, Newspaper, 
-    Download, Crown, Star 
+    Download, Crown, Star, Camera
 } from 'lucide-react';
 
 interface SettingsProps {
@@ -19,6 +20,7 @@ interface SettingsProps {
 
 export const Settings: React.FC<SettingsProps> = ({ onUpdateUser, onLogout }) => {
     const navigate = useNavigate();
+    const { addToast } = useToast();
     const [user, setUser] = useState<User | null>(null);
 
     // --- Profile Form State ---
@@ -65,13 +67,13 @@ export const Settings: React.FC<SettingsProps> = ({ onUpdateUser, onLogout }) =>
         if (!file) return;
 
         if (file.size > 5 * 1024 * 1024) {
-            alert("A imagem deve ter no máximo 5MB.");
+            addToast("A imagem deve ter no máximo 5MB.", "error");
             return;
         }
 
         const validTypes = ['image/jpeg', 'image/png', 'image/webp'];
         if (!validTypes.includes(file.type)) {
-            alert("Formato inválido. Use JPG, PNG ou WebP.");
+            addToast("Formato inválido. Use JPG, PNG ou WebP.", "error");
             return;
         }
 
@@ -79,13 +81,14 @@ export const Settings: React.FC<SettingsProps> = ({ onUpdateUser, onLogout }) =>
         reader.onload = (readerEvent) => {
             const image = new Image();
             image.onload = () => {
-                // Resize logic
+                // Resize logic for square 1:1
                 const canvas = document.createElement('canvas');
                 const ctx = canvas.getContext('2d');
-                canvas.width = 200;
-                canvas.height = 200;
+                const size = Math.min(image.width, image.height);
+                canvas.width = 300;
+                canvas.height = 300;
                 if (ctx) {
-                    ctx.drawImage(image, 0, 0, 200, 200);
+                    ctx.drawImage(image, (image.width - size) / 2, (image.height - size) / 2, size, size, 0, 0, 300, 300);
                     const resizedDataUrl = canvas.toDataURL(file.type);
                     setAvatarPreview(resizedDataUrl);
                 }
@@ -123,8 +126,9 @@ export const Settings: React.FC<SettingsProps> = ({ onUpdateUser, onLogout }) =>
         setUser(updatedUser);
         
         setSaveSuccess(true);
+        addToast("Perfil atualizado com sucesso!", "success");
         setTimeout(() => setSaveSuccess(false), 3000);
-        setPassword(''); // Clear password field for security
+        setPassword(''); 
     };
 
     // --- Subscription Actions ---
@@ -132,11 +136,10 @@ export const Settings: React.FC<SettingsProps> = ({ onUpdateUser, onLogout }) =>
         setIsProcessingUpgrade(true);
         try {
             const response = await paymentService.createCheckoutSession(user);
-            // Redirect to mock checkout
             window.location.hash = response.init_point.replace('#/', '');
         } catch (error) {
             console.error("Erro ao criar checkout:", error);
-            alert("Erro ao iniciar pagamento. Tente novamente.");
+            addToast("Erro ao iniciar pagamento. Tente novamente.", "error");
         } finally {
             setIsProcessingUpgrade(false);
         }
@@ -146,40 +149,43 @@ export const Settings: React.FC<SettingsProps> = ({ onUpdateUser, onLogout }) =>
         if (!user) return;
         try {
             await paymentService.cancelSubscription(user.id);
+            addToast("Sua assinatura foi cancelada.", "info");
             navigate('/cancellation-success');
         } catch (error) {
-            alert('Erro ao cancelar assinatura. Tente novamente.');
+            addToast('Erro ao cancelar assinatura. Tente novamente.', 'error');
         }
     };
 
     // --- Danger Zone Actions ---
     const handleDeleteData = () => {
         if (!confirmPassword) {
-            alert("Digite sua senha para confirmar.");
+            addToast("Digite sua senha para confirmar.", "warning");
             return;
         }
-        // Mock password check: Accept anything for demo
         localStorage.removeItem('financeapp_transactions');
         localStorage.removeItem('financeapp_accounts');
         localStorage.removeItem('financeapp_cards');
         localStorage.removeItem('financeapp_goals');
         localStorage.removeItem('financeapp_radar_news');
         
-        alert("Todos os dados financeiros foram excluídos.");
+        addToast("Todos os dados financeiros foram excluídos.", "info");
         setIsDeleteDataModalOpen(false);
         setConfirmPassword('');
-        window.location.reload(); // Refresh dashboard
+        setTimeout(() => window.location.reload(), 1000);
     };
 
     const handleDeleteAccount = () => {
          if (!confirmPassword) {
-            alert("Digite sua senha para confirmar.");
+            addToast("Digite sua senha para confirmar.", "warning");
             return;
         }
         // Wipe everything
         localStorage.clear();
-        onLogout();
-        navigate('/login');
+        addToast("Sua conta foi excluída com sucesso.", "info");
+        setTimeout(() => {
+            onLogout();
+            navigate('/login');
+        }, 500);
     };
 
     return (
@@ -196,12 +202,6 @@ export const Settings: React.FC<SettingsProps> = ({ onUpdateUser, onLogout }) =>
                     <h2 className="text-lg font-bold text-gray-900">Edição de Perfil</h2>
                 </div>
 
-                {saveSuccess && (
-                    <div className="mb-4 bg-green-50 text-green-700 p-3 rounded flex items-center">
-                        <Check size={18} className="mr-2" /> Alterações salvas com sucesso!
-                    </div>
-                )}
-                
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                     {/* Avatar Upload */}
                     <div className="flex flex-col items-center space-y-4">
@@ -209,15 +209,15 @@ export const Settings: React.FC<SettingsProps> = ({ onUpdateUser, onLogout }) =>
                             <img 
                                 src={avatarPreview || `https://ui-avatars.com/api/?name=${firstName}+${lastName}`} 
                                 alt="Profile" 
-                                className="w-32 h-32 rounded-full object-cover border-4 border-white shadow-md bg-gray-100"
+                                className="w-32 h-32 rounded-full object-cover border-4 border-white shadow-md bg-gray-100 aspect-square"
                             />
                             <label className="absolute bottom-0 right-0 bg-primary-600 text-white p-2 rounded-full cursor-pointer hover:bg-primary-700 shadow-sm transition-transform hover:scale-110">
-                                <Upload size={16} />
+                                <Camera size={16} />
                                 <input type="file" className="hidden" accept="image/jpeg, image/png, image/webp" onChange={handleImageUpload} />
                             </label>
                         </div>
                         <span className="text-xs text-gray-500 text-center">
-                            JPG, PNG ou WebP<br/>Max 5MB (200x200px)
+                            JPG, PNG ou WebP<br/>Max 5MB (1:1 format)
                         </span>
                     </div>
 
@@ -330,7 +330,7 @@ export const Settings: React.FC<SettingsProps> = ({ onUpdateUser, onLogout }) =>
                                 {isPermanent 
                                     ? "Assinatura Permanente - Sem data de expiração" 
                                     : isPremium 
-                                        ? "Renovação automática em 15/12/2023" 
+                                        ? "Renovação automática mensal" 
                                         : "Acesso limitado aos recursos básicos"}
                             </p>
                         </div>
@@ -339,23 +339,6 @@ export const Settings: React.FC<SettingsProps> = ({ onUpdateUser, onLogout }) =>
                                 {isPremium ? "R$ 19,90" : "R$ 0,00"}
                                 <span className="text-sm font-normal text-gray-500">{isPermanent ? "/único" : "/mês"}</span>
                             </span>
-                        </div>
-                    </div>
-
-                    <div className="border-t border-gray-200 pt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="space-y-3">
-                            <h4 className="font-semibold text-gray-900 mb-2">Recursos Disponíveis</h4>
-                            <FeatureItem active={true} text="1 Conta Bancária" />
-                            <FeatureItem active={true} text="1 Cartão de Crédito" />
-                            <FeatureItem active={true} text="1 Meta Financeira" />
-                            <FeatureItem active={true} text="Cadastrar Transações" />
-                            <FeatureItem active={isPremium} text="Contas Ilimitadas" premium />
-                        </div>
-                        <div className="space-y-3 md:mt-8">
-                            <FeatureItem active={isPremium} text="Cartões Ilimitados" premium />
-                            <FeatureItem active={isPremium} text="Metas Ilimitadas" premium />
-                            <FeatureItem active={isPremium} text="Radar do Mercado (IA)" premium />
-                            <FeatureItem active={isPremium} text="Exportar Relatórios (PDF/CSV)" premium />
                         </div>
                     </div>
 
@@ -395,14 +378,14 @@ export const Settings: React.FC<SettingsProps> = ({ onUpdateUser, onLogout }) =>
                     <div className="flex items-center justify-between p-4 bg-white rounded-lg border border-red-100">
                         <div>
                             <h4 className="text-sm font-bold text-gray-900">Deletar todos os dados</h4>
-                            <p className="text-sm text-gray-500">Remove transações, contas e metas, mas mantém sua conta ativa.</p>
+                            <p className="text-sm text-gray-500">Remove transações, contas e metas.</p>
                         </div>
                         {isAdmin ? (
                             <div className="ml-4 px-3 py-2 bg-gray-100 text-gray-500 text-xs rounded border border-gray-200 cursor-not-allowed">
                                 Desabilitado (Admin)
                             </div>
                         ) : (
-                            <Button variant="outline" className="text-red-600 border-red-200 hover:bg-red-50 whitespace-nowrap ml-4" onClick={() => setIsDeleteDataModalOpen(true)}>
+                            <Button variant="outline" className="text-red-600 border-red-200 hover:bg-red-50 ml-4" onClick={() => setIsDeleteDataModalOpen(true)}>
                                 Deletar Dados
                             </Button>
                         )}
@@ -411,14 +394,14 @@ export const Settings: React.FC<SettingsProps> = ({ onUpdateUser, onLogout }) =>
                     <div className="flex items-center justify-between p-4 bg-white rounded-lg border border-red-100">
                          <div>
                             <h4 className="text-sm font-bold text-gray-900">Excluir Conta Definitivamente</h4>
-                            <p className="text-sm text-gray-500">Esta ação não pode ser desfeita. Todos os seus dados serão perdidos.</p>
+                            <p className="text-sm text-gray-500">Ação irreversível.</p>
                         </div>
                          {isProtectedAccount ? (
                             <div className="ml-4 px-3 py-2 bg-gray-100 text-gray-500 text-xs rounded border border-gray-200 cursor-not-allowed">
-                                Desabilitado (Conta Especial)
+                                Desabilitado
                             </div>
                         ) : (
-                            <Button variant="danger" className="whitespace-nowrap ml-4" onClick={() => setIsDeleteAccountModalOpen(true)}>
+                            <Button variant="danger" className="ml-4" onClick={() => setIsDeleteAccountModalOpen(true)}>
                                 Excluir Minha Conta
                             </Button>
                         )}
@@ -426,32 +409,21 @@ export const Settings: React.FC<SettingsProps> = ({ onUpdateUser, onLogout }) =>
                 </div>
             </Card>
 
-            {/* --- MODALS --- */}
-
-            {/* Cancel Subscription Modal */}
+            {/* MODALS */}
             <Modal
                 isOpen={isCancelModalOpen}
                 onClose={() => setIsCancelModalOpen(false)}
                 title="Cancelar Assinatura?"
                 footer={
                     <>
-                        <Button variant="danger" onClick={handleCancelSubscription}>Cancelar Assinatura</Button>
+                        <Button variant="danger" onClick={handleCancelSubscription}>Confirmar</Button>
                         <Button variant="secondary" onClick={() => setIsCancelModalOpen(false)} className="mr-3">Voltar</Button>
                     </>
                 }
             >
-                <div className="text-center py-4">
-                    <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 mb-4">
-                        <AlertTriangle className="h-6 w-6 text-red-600" />
-                    </div>
-                    <p className="text-gray-600">
-                        Tem certeza que deseja cancelar? Você perderá acesso a todos os recursos Premium imediatamente e seus limites serão reduzidos.
-                    </p>
-                    <p className="font-bold text-red-600 mt-2">Esta ação não pode ser desfeita.</p>
-                </div>
+                <p className="text-gray-600">Tem certeza que deseja cancelar? Você perderá os recursos PRO.</p>
             </Modal>
 
-            {/* Delete Data Modal */}
             <Modal
                 isOpen={isDeleteDataModalOpen}
                 onClose={() => setIsDeleteDataModalOpen(false)}
@@ -464,55 +436,34 @@ export const Settings: React.FC<SettingsProps> = ({ onUpdateUser, onLogout }) =>
                 }
             >
                 <div className="space-y-4">
-                    <p className="text-sm text-gray-600">
-                        Você está prestes a apagar <strong>todas as suas contas, cartões, transações e metas</strong>. 
-                        Sua conta de usuário permanecerá ativa.
-                    </p>
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700">Digite sua senha para confirmar</label>
-                        <input 
-                            type="password" 
-                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-red-500 focus:ring-red-500 sm:text-sm border p-2"
-                            value={confirmPassword}
-                            onChange={(e) => setConfirmPassword(e.target.value)}
-                        />
-                    </div>
+                    <p className="text-sm text-gray-600">Digite sua senha para confirmar a limpeza dos dados.</p>
+                    <input 
+                        type="password" 
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm border p-2"
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                    />
                 </div>
             </Modal>
 
-             {/* Delete Account Modal */}
              <Modal
                 isOpen={isDeleteAccountModalOpen}
                 onClose={() => setIsDeleteAccountModalOpen(false)}
                 title="Excluir Conta"
                 footer={
                     <>
-                        <Button variant="danger" onClick={handleDeleteAccount}>Excluir Tudo</Button>
+                        <Button variant="danger" onClick={handleDeleteAccount}>Excluir Agora</Button>
                         <Button variant="secondary" onClick={() => setIsDeleteAccountModalOpen(false)} className="mr-3">Cancelar</Button>
                     </>
                 }
             >
                 <div className="space-y-4">
-                     <div className="bg-red-50 p-4 rounded border border-red-200">
-                        <h4 className="text-red-800 font-bold flex items-center"><AlertTriangle size={16} className="mr-2"/> ATENÇÃO: Ação Irreversível</h4>
-                        <ul className="list-disc pl-5 mt-2 text-sm text-red-700">
-                            <li>Seu perfil será apagado.</li>
-                            <li>Todo o histórico financeiro será perdido.</li>
-                            <li>O acesso será revogado imediatamente.</li>
-                        </ul>
-                     </div>
-
-                     {isPremium && !isPermanent && (
-                        <div className="text-sm text-amber-600 font-medium">
-                            ⚠️ Você possui uma assinatura Premium ativa. Recomendamos cancelar a assinatura primeiro para evitar cobranças futuras.
-                        </div>
-                     )}
-
+                     <div className="bg-red-50 p-4 rounded border border-red-200 text-red-800 text-sm font-bold">ATENÇÃO: Sua conta e todos os dados serão apagados permanentemente.</div>
                     <div>
                         <label className="block text-sm font-medium text-gray-700">Digite sua senha para confirmar</label>
                         <input 
                             type="password" 
-                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-red-500 focus:ring-red-500 sm:text-sm border p-2"
+                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm border p-2"
                             value={confirmPassword}
                             onChange={(e) => setConfirmPassword(e.target.value)}
                         />

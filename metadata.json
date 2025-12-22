@@ -1,5 +1,8 @@
 {
-  "name": "FinanceApp",
-  "description": "A complete personal finance management system with Freemium plans, dashboards, and Mercado Pago integration.",
-  "requestFramePermissions": []
+  "name": "FinanceApp Pro",
+  "description": "Gestão financeira inteligente com IA Gemini 3, integração Mercado Pago e dashboards avançados.",
+  "requestFramePermissions": [
+    "geolocation",
+    "camera"
+  ]
 }

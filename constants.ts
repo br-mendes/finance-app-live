@@ -1,24 +1,23 @@
-
 import { PlanType } from './types';
 
-export const APP_NAME = 'FinanceAPP';
+export const APP_NAME = 'FinanceApp';
 
 // Supabase Configuration
-// Prioritize Environment Variables (Vercel) -> Fallback to Hardcoded (Local/Demo)
-export const SUPABASE_URL = import.meta.env?.VITE_SUPABASE_URL || 'https://rfbupauusvlcvnxtphhx.supabase.co';
-export const SUPABASE_ANON_KEY = import.meta.env?.VITE_SUPABASE_ANON_KEY || 'sb_publishable_MAQmI9q0ukW976lWKo1MWQ_Tz459gnA';
+// Fix: Use process.env to avoid 'Property env does not exist on type ImportMeta' error
+export const SUPABASE_URL = process.env.VITE_SUPABASE_URL || 'https://rfbupauusvlcvnxtphhx.supabase.co';
+export const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY || 'sb_publishable_MAQmI9q0ukW976lWKo1MWQ_Tz459gnA';
 
 // Special Users
 export const ADMIN_EMAIL = 'financeappbr@gmail.com';
 export const PERMANENT_PREMIUM_EMAIL = 'brunoafonso.mendes@gmail.com';
 
-// Mock Data for Initial Setup (Simulating DB responses)
+// Mock Data for Initial Setup
 export const MOCK_USER = {
   id: 'user-123',
   email: 'usuario@exemplo.com',
   first_name: 'Bruno',
   last_name: 'Mendes',
-  cpf: '000.000.000-00', // Added required field
+  cpf: '000.000.000-00',
   plan: PlanType.FREE,
   is_admin: false,
   avatar_url: 'https://i.pravatar.cc/150?img=11'

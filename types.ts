@@ -1,4 +1,3 @@
-
 export enum PlanType {
   FREE = 'free',
   PREMIUM = 'premium'
@@ -9,14 +8,14 @@ export interface User {
   email: string;
   first_name: string;
   last_name: string;
-  cpf: string; // SQL: NOT NULL
+  cpf: string; 
   address?: string;
   avatar_url?: string;
   plan: PlanType;
   plan_start_date?: string;
   plan_renewal_date?: string;
   is_admin: boolean;
-  is_permanent_premium?: boolean; // New flag for special users
+  is_permanent_premium?: boolean;
   created_at?: string;
   updated_at?: string;
 }
@@ -45,20 +44,21 @@ export enum CardBrand {
   MASTERCARD = 'mastercard',
   ELO = 'elo',
   AMEX = 'amex',
-  OTHER = 'other' // Fallback for frontend
+  OTHER = 'other' 
 }
 
 export interface CreditCard {
   id: string;
   user_id: string;
   last_four_digits: string;
-  issuer_bank: string; // Renamed from institution to match SQL
+  issuer_bank: string; 
   card_brand: CardBrand;
   limit_amount: number;
   limit_date?: string;
   due_day: number;
   closing_day: number;
-  closing_offset: number; // 3, 5, 8, 10
+  closing_offset: number; 
+  background_gradient?: string;
   created_at: string;
   updated_at?: string;
 }
