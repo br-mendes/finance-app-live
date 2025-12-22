@@ -1,3 +1,4 @@
+
 import { supabase } from './supabaseClient';
 
 export interface FinancialMetrics {
@@ -50,29 +51,22 @@ export const calculateDashboardMetrics = async (userId: string): Promise<Financi
     accountsData,
     cardsData,
     incomeData,
-    expensesData
+    expensesData,
+    creditTransactions
   ] = await Promise.all([
-    supabase.from('accounts').select('balance').eq('user_id', userId),
-    supabase.from('credit_cards').select('limit_amount').eq('user_id', userId),
-    supabase.from('transactions').select('amount').eq('user_id', userId).eq('type', 'receive').gte('date', start).lte('date', end),
-    supabase.from('transactions').select('amount').eq('user_id', userId).in('type', ['debit', 'credit']).gte('date', start).lte('date', end)
+    supabase.from('accounts').select('balance').eq('user_id', userId).is('deleted_at', null),
+    supabase.from('credit_cards').select('limit_amount').eq('user_id', userId).is('deleted_at', null),
+    supabase.from('transactions').select('amount').eq('user_id', userId).eq('type', 'receive').gte('date', start).lte('date', end).is('deleted_at', null),
+    supabase.from('transactions').select('amount').eq('user_id', userId).in('type', ['debit', 'credit']).gte('date', start).lte('date', end).is('deleted_at', null),
+    supabase.from('transactions').select('amount').eq('user_id', userId).eq('type', 'credit').gte('date', start).lte('date', end).is('deleted_at', null)
   ]);
   
   const totalBalance = accountsData.data?.reduce((sum, acc) => sum + (acc.balance || 0), 0) || 0;
   const totalCreditLimit = cardsData.data?.reduce((sum, card) => sum + (card.limit_amount || 0), 0) || 0;
   const monthlyIncome = incomeData.data?.reduce((sum, t) => sum + (t.amount || 0), 0) || 0;
   const monthlyExpenses = expensesData.data?.reduce((sum, t) => sum + (t.amount || 0), 0) || 0;
-  
-  // Credit usage based on active credit transactions in current billing cycle
-  const { data: creditTransactions } = await supabase
-    .from('transactions')
-    .select('amount')
-    .eq('user_id', userId)
-    .eq('type', 'credit')
-    .gte('date', start)
-    .lte('date', end);
-  
-  const creditUsage = creditTransactions?.reduce((sum, t) => sum + (t.amount || 0), 0) || 0;
+  const creditUsage = creditTransactions.data?.reduce((sum, t) => sum + (t.amount || 0), 0) || 0;
+
   const creditUtilization = totalCreditLimit > 0 ? (creditUsage / totalCreditLimit) * 100 : 0;
   const savingsRate = monthlyIncome > 0 ? ((monthlyIncome - monthlyExpenses) / monthlyIncome) * 100 : 0;
   
@@ -93,7 +87,7 @@ export const calculateMonthlyComparison = async (userId: string): Promise<Monthl
   const previous = getPeriodBoundaries(1);
 
   const fetchSum = async (type: 'receive' | 'expense', start: string, end: string) => {
-    const query = supabase.from('transactions').select('amount').eq('user_id', userId);
+    const query = supabase.from('transactions').select('amount').eq('user_id', userId).is('deleted_at', null);
     if (type === 'receive') {
       query.eq('type', 'receive');
     } else {

@@ -6,10 +6,9 @@ export const usePersistentData = () => {
   const { user } = useAuth();
   
   const loadUserData = async () => {
-    // Adicionado 'cards' ao retorno padrão para evitar erros de propriedade inexistente
     if (!user?.id) return { accounts: [], transactions: [], goals: [], cards: [] };
     
-    // Carregar tudo do banco de dados respeitando o soft-delete
+    // Carregar tudo do banco de dados respeitando o soft-delete (.is('deleted_at', null))
     const [accounts, transactions, goals, cards] = await Promise.all([
       supabase
         .from('accounts')
@@ -33,7 +32,6 @@ export const usePersistentData = () => {
         .is('deleted_at', null)
         .order('created_at', { ascending: false }),
 
-      // Busca os cartões de crédito do usuário que não foram excluídos
       supabase
         .from('credit_cards')
         .select('*')
@@ -50,12 +48,12 @@ export const usePersistentData = () => {
     };
   };
   
-  // Configurar real-time subscriptions para atualizações automáticas em toda a aplicação
+  // Configurar real-time subscriptions para atualizações automáticas (Broadcast)
   const setupRealtimeSubscriptions = (onUpdate: (payload: any) => void) => {
     if (!user?.id) return () => {};
     
     const channel = supabase
-      .channel('db-changes')
+      .channel('finance-realtime')
       .on('postgres_changes', 
         { 
           event: '*', 
@@ -63,7 +61,7 @@ export const usePersistentData = () => {
           filter: `user_id=eq.${user.id}`
         }, 
         (payload) => {
-          console.log('Real-time sync:', payload.table, payload.eventType);
+          console.debug('DB Change Received:', payload.table, payload.eventType);
           onUpdate(payload);
         }
       )

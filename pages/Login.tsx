@@ -1,10 +1,12 @@
+
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
-import { Eye, EyeOff, Lock, Mail } from 'lucide-react';
+import { Eye, EyeOff, Lock, Mail, ChevronRight, AlertCircle } from 'lucide-react';
 import { User, PlanType } from '../types';
 import { ADMIN_EMAIL, PERMANENT_PREMIUM_EMAIL, MOCK_USER } from '../constants';
 import { useToast } from '../components/ui/Toast';
+import { Card } from '../components/ui/Card';
 
 interface LoginProps {
   onLogin: (user: User) => void;
@@ -32,13 +34,11 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
             let isAdmin = false;
             let isPermanentPremium = false;
 
-            // 1. Admin Logic
             if (normalizedEmail === ADMIN_EMAIL) {
                 isAdmin = true;
-                plan = PlanType.PREMIUM; // Admins get full access
+                plan = PlanType.PREMIUM;
             }
 
-            // 2. Permanent Premium Logic
             if (normalizedEmail === PERMANENT_PREMIUM_EMAIL) {
                 plan = PlanType.PREMIUM;
                 isPermanentPremium = true;
@@ -58,139 +58,101 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
             onLogin(user);
             setLoading(false);
             
-            if (isAdmin) {
-                navigate('/admin');
-            } else {
-                if (isPermanentPremium) {
-                    addToast("Você é usuário Premium permanente! 🎉", "success");
-                } else {
-                    addToast("Login realizado com sucesso!", "success");
-                }
-                navigate('/');
-            }
+            if (isAdmin) navigate('/admin');
+            else navigate('/');
         } else {
-            setError('Por favor, insira um email válido.');
+            setError('Dados inválidos. Verifique seu e-mail e senha.');
             setLoading(false);
         }
     }, 1000);
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8">
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="flex justify-center">
+        <div className="flex justify-center mb-8">
             <Link to="/">
-                <img 
-                  src="https://i.ibb.co/9mt6zRFj/generated-image-removebg-preview.png" 
-                  alt="FinanceAPP Logo" 
-                  className="h-20 w-auto hover:opacity-90 transition-opacity"
-                />
+                <img src="https://i.ibb.co/9mt6zRFj/generated-image-removebg-preview.png" alt="FinanceAPP" className="h-16 w-auto" />
             </Link>
         </div>
-        <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-          Entrar no FinanceAPP
-        </h2>
-        <p className="mt-2 text-center text-sm text-gray-600">
-          Ou{' '}
-          <Link to="/register" className="font-medium text-primary-600 hover:text-primary-500">
-            crie sua conta gratuitamente
-          </Link>
-        </p>
-      </div>
+        
+        <Card className="rounded-[2.5rem] p-10 border-none shadow-2xl shadow-gray-200/50 bg-white">
+          <div className="text-center mb-10">
+            <h1 className="text-3xl font-black text-gray-900 tracking-tight">Bem-vindo</h1>
+            <p className="text-sm text-gray-500 font-medium mt-2">Acesse sua inteligência financeira.</p>
+          </div>
 
-      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10">
           <form className="space-y-6" onSubmit={handleSubmit}>
             {error && (
-                <div className="bg-red-50 border-l-4 border-red-400 p-4">
-                    <div className="flex">
-                        <div className="ml-3">
-                            <p className="text-sm text-red-700">{error}</p>
-                        </div>
-                    </div>
+                <div className="bg-rose-50 text-rose-600 p-4 rounded-2xl text-[10px] font-black uppercase tracking-widest border border-rose-100 flex items-center gap-2">
+                    <AlertCircle size={14} /> {error}
                 </div>
             )}
 
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-                Email
-              </label>
-              <div className="mt-1 relative rounded-md shadow-sm">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Mail className="h-5 w-5 text-gray-400" />
-                </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">E-mail</label>
+              <div className="relative">
+                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
                 <input
-                  id="email"
-                  name="email"
                   type="email"
-                  autoComplete="email"
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="focus:ring-primary-500 focus:border-primary-500 block w-full pl-10 sm:text-sm border-gray-300 rounded-md py-2 border"
+                  className="w-full pl-12 pr-4 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm focus:ring-2 focus:ring-primary-500 outline-none transition-all"
                   placeholder="seu@email.com"
                 />
               </div>
             </div>
 
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-                Senha
-              </label>
-              <div className="mt-1 relative rounded-md shadow-sm">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Lock className="h-5 w-5 text-gray-400" />
-                </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Senha</label>
+              <div className="relative">
+                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
                 <input
-                  id="password"
-                  name="password"
                   type={showPassword ? 'text' : 'password'}
-                  autoComplete="current-password"
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="focus:ring-primary-500 focus:border-primary-500 block w-full pl-10 pr-10 sm:text-sm border-gray-300 rounded-md py-2 border"
+                  className="w-full pl-12 pr-12 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm focus:ring-2 focus:ring-primary-500 outline-none transition-all"
                   placeholder="••••••••"
                 />
-                <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="text-gray-400 hover:text-gray-500 focus:outline-none"
-                  >
-                    {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
               </div>
             </div>
 
-            <div className="flex items-center justify-between">
-              <div className="flex items-center">
-                <input
-                  id="remember-me"
-                  name="remember-me"
-                  type="checkbox"
-                  className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
-                />
-                <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-900">
-                  Lembrar de mim
-                </label>
-              </div>
-
-              <div className="text-sm">
-                <a href="#" className="font-medium text-primary-600 hover:text-primary-500">
-                  Esqueceu a senha?
-                </a>
-              </div>
-            </div>
-
-            <div>
-              <Button type="submit" fullWidth loading={loading}>
-                Entrar
-              </Button>
-            </div>
+            <Button type="submit" fullWidth size="lg" loading={loading} className="py-5 shadow-xl shadow-primary-500/20">
+              Acessar Painel <ChevronRight className="ml-2" size={18} />
+            </Button>
           </form>
-        </div>
+
+          {/* Nova Seção de Links */}
+          <div className="mt-8 border-t border-gray-50 pt-6">
+            <div className="text-center">
+              <button
+                onClick={() => navigate('/forgot-password')}
+                className="text-blue-600 hover:text-blue-800 text-sm font-medium transition-colors"
+              >
+                Esqueceu sua senha?
+              </button>
+            </div>
+            
+            <div className="mt-4 text-center text-sm text-gray-600">
+              Não tem uma conta?{' '}
+              <button
+                onClick={() => navigate('/signup')}
+                className="text-blue-600 hover:text-blue-800 font-bold transition-colors"
+              >
+                Cadastre-se
+              </button>
+            </div>
+          </div>
+        </Card>
       </div>
     </div>
   );

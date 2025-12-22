@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, Suspense } from 'react';
 import { HashRouter as Router, Routes, Route, Navigate, Link, useLocation } from 'react-router-dom';
 import { Layout } from './components/Layout';
@@ -23,6 +24,7 @@ function lazyImport<T extends React.ComponentType<any>>(factory: () => Promise<{
 // Lazy Load Pages
 const Login = lazyImport(() => import('./pages/Login'), 'Login');
 const Register = lazyImport(() => import('./pages/Register'), 'Register');
+const ForgotPassword = lazyImport(() => import('./pages/ForgotPassword'), 'ForgotPassword');
 const Landing = lazyImport(() => import('./pages/Landing'), 'Landing');
 const PaymentSuccess = lazyImport(() => import('./pages/PaymentSuccess'), 'PaymentSuccess');
 const CancellationSuccess = lazyImport(() => import('./pages/CancellationSuccess'), 'CancellationSuccess');
@@ -129,6 +131,18 @@ function App() {
             
             <Route path="/register" element={
                 !user ? <Register onLogin={handleLogin} /> : <Navigate to="/" replace />
+            } />
+            
+            <Route path="/signup" element={
+                !user ? <Register onLogin={handleLogin} /> : <Navigate to="/" replace />
+            } />
+
+            <Route path="/forgot-password" element={
+                <ForgotPassword />
+            } />
+            
+            <Route path="/reset-password" element={
+                <ForgotPassword />
             } />
 
             <Route path="/payment-success" element={
