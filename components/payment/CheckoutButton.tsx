@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { createPremiumCheckout } from '../../services/mercadoPago';
-import { User } from '../../types';
+import { createPremiumCheckout, CheckoutData } from '../../services/mercadoPago';
+import { User, CheckoutAddress } from '../../types';
 import { useToast } from '../ui/Toast';
 import { Crown, Sparkles, Loader2 } from 'lucide-react';
 import { logAction } from '../../services/supabaseClient';
@@ -27,21 +27,27 @@ export const CheckoutButton: React.FC<CheckoutButtonProps> = ({
       return;
     }
     
+    // Verificação de endereço estruturado
+    if (!user.address || typeof user.address === 'string') {
+      addToast('Complete seu endereço nas configurações para prosseguir com o pagamento.', 'warning');
+      return;
+    }
+    
     setLoading(true);
     
     try {
       await logAction(user.id, 'INITIATE_CHECKOUT', { planType });
 
-      const checkoutData = {
+      const checkoutData: CheckoutData = {
         userId: user.id,
         userEmail: user.email,
         userName: `${user.first_name} ${user.last_name}`,
         userCPF: user.cpf || '',
+        address: user.address as CheckoutAddress,
         planType
       };
       
       const { checkoutUrl } = await createPremiumCheckout(checkoutData);
-      
       window.location.href = checkoutUrl;
       
     } catch (error: any) {

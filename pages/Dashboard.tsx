@@ -1,13 +1,14 @@
-import React, { useState, useEffect } from 'react';
+
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { 
-    RefreshCw, Sparkles, Lightbulb, ChevronRight, BrainCircuit, 
-    TrendingUp, ShieldCheck, Target, Zap, ArrowUpRight,
-    ArrowRightCircle, Star
+    RefreshCw, Sparkles, TrendingUp, BrainCircuit, 
+    Target, Zap, ArrowRightCircle, Star, Radio
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
+import { usePersistentData } from '../hooks/usePersistentData';
 import { PlanType } from '../types';
 import { 
     calculateDashboardMetrics, 
@@ -20,23 +21,24 @@ import { FinancialHealth } from '../components/dashboard/FinancialHealth';
 export const Dashboard: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { loadUserData, setupRealtimeSubscriptions } = usePersistentData();
+  
   const [metrics, setMetrics] = useState<FinancialMetrics | null>(null);
   const [aiInsights, setAiInsights] = useState<FinancialInsights | null>(null);
   const [loadingAi, setLoadingAi] = useState(false);
+  const [isLive, setIsLive] = useState(false);
+
   const isPremium = user?.plan === PlanType.PREMIUM;
 
-  const loadBaseMetrics = async () => {
+  const loadBaseMetrics = useCallback(async () => {
     if (!user?.id) return;
     try {
         const m = await calculateDashboardMetrics(user.id);
         setMetrics(m);
-        if (isPremium && m && !aiInsights) {
-            handleAiInsights(m);
-        }
     } catch (err) {
         console.error("Metrics Loading Error:", err);
     }
-  };
+  }, [user?.id]);
 
   const handleAiInsights = async (m: FinancialMetrics) => {
     if (loadingAi) return;
@@ -62,7 +64,16 @@ export const Dashboard: React.FC = () => {
 
   useEffect(() => {
     loadBaseMetrics();
-  }, [user?.id]);
+
+    // Setup real-time updates
+    const cleanup = setupRealtimeSubscriptions(() => {
+      setIsLive(true);
+      loadBaseMetrics();
+      setTimeout(() => setIsLive(false), 2000);
+    });
+
+    return () => cleanup && cleanup();
+  }, [loadBaseMetrics, setupRealtimeSubscriptions]);
 
   return (
     <div className="space-y-8 animate-fade-in-up max-w-7xl mx-auto pb-24">
@@ -74,6 +85,11 @@ export const Dashboard: React.FC = () => {
              {isPremium && (
                  <div className="flex items-center gap-1 bg-gradient-to-r from-amber-500 to-yellow-600 text-white text-[9px] font-black px-2.5 py-1 rounded-full uppercase shadow-lg shadow-amber-500/20 tracking-widest border border-amber-400/50">
                     <Star size={10} fill="currentColor" /> Pro
+                 </div>
+             )}
+             {isLive && (
+                 <div className="flex items-center gap-1.5 bg-emerald-50 text-emerald-600 text-[9px] font-black px-2.5 py-1 rounded-full uppercase border border-emerald-100 animate-pulse">
+                    <Radio size={10} /> Live
                  </div>
              )}
           </div>
@@ -96,7 +112,6 @@ export const Dashboard: React.FC = () => {
       <DashboardCards />
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        {/* Coluna Principal (8/12) */}
         <div className="lg:col-span-8 space-y-8">
           <FinancialHealth />
           
@@ -128,12 +143,11 @@ export const Dashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* Sidebar IA Advisor (4/12) */}
+        {/* Advisor IA */}
         <div className="lg:col-span-4">
           {isPremium ? (
              <Card className="bg-[#0b0e14] text-white border-none shadow-3xl h-full p-0 overflow-hidden group flex flex-col min-h-[500px]">
                 <div className="p-8 flex-1 flex flex-col">
-                  {/* Header do Chat/Advisor */}
                   <div className="flex items-center justify-between mb-10">
                       <div className="flex items-center gap-4">
                           <div className="relative">
@@ -147,13 +161,6 @@ export const Dashboard: React.FC = () => {
                             <p className="text-[9px] text-primary-400 uppercase tracking-[0.2em] font-black mt-1">Intelligence Layer</p>
                           </div>
                       </div>
-                      <button 
-                        onClick={() => metrics && handleAiInsights(metrics)} 
-                        disabled={loadingAi}
-                        className="p-3 bg-white/5 hover:bg-white/10 rounded-2xl transition-all border border-white/10 shadow-lg"
-                      >
-                          <RefreshCw size={20} className={`${loadingAi ? "animate-spin" : ""} text-white/50`} />
-                      </button>
                   </div>
 
                   {loadingAi ? (
@@ -163,81 +170,39 @@ export const Dashboard: React.FC = () => {
                             <Zap className="absolute inset-0 m-auto text-amber-400 animate-pulse" size={28} />
                           </div>
                           <div className="text-center space-y-2">
-                            <p className="text-lg font-black tracking-tight">Sincronizando Dados</p>
+                            <p className="text-lg font-black tracking-tight">Analisando dados...</p>
                             <p className="text-[10px] text-white/30 uppercase tracking-widest font-bold">Consultando Gemini 3 Pro...</p>
                           </div>
                       </div>
                   ) : aiInsights ? (
                       <div className="space-y-8 flex-1 flex flex-col animate-fade-in-up">
                           <div className="bg-primary-600/10 p-6 rounded-[2rem] border border-primary-500/20 backdrop-blur-md relative">
-                            <div className="absolute top-0 left-6 -translate-y-1/2">
-                                <Lightbulb size={24} className="text-amber-400 fill-amber-400/20" />
-                            </div>
                             <p className="text-white/90 leading-relaxed text-sm font-medium italic">
                                 "{aiInsights.summary}"
                             </p>
                           </div>
-                          
                           <div className="space-y-5">
-                              <h4 className="text-[9px] font-black uppercase text-primary-400 tracking-[0.3em] border-b border-white/5 pb-3">Insights de Hoje</h4>
-                              <ul className="space-y-5">
-                                  {aiInsights.insights.map((item, i) => (
-                                      <li key={i} className="text-xs flex items-start gap-4 text-white/70 leading-relaxed group/item">
-                                          <div className="mt-1 w-2 h-2 rounded-full bg-primary-500 shadow-[0_0_12px_rgba(14,165,233,0.6)] group-hover/item:scale-125 transition-transform"></div>
-                                          <span className="group-hover/item:text-white transition-colors">{item}</span>
-                                      </li>
-                                  ))}
-                              </ul>
-                          </div>
-
-                          <div className="mt-auto pt-8 border-t border-white/5">
-                              <h4 className="text-[9px] font-black uppercase text-amber-500 tracking-[0.3em] mb-5">Próximos Passos</h4>
-                              <div className="space-y-3">
-                                  {aiInsights.recommendations.map((rec, i) => (
-                                      <div key={i} className="bg-white/5 px-5 py-4 rounded-2xl border border-white/5 text-[11px] font-bold flex items-center justify-between group/rec hover:bg-white/10 transition-all cursor-pointer">
-                                          <span className="text-white/80">{rec}</span>
-                                          <ChevronRight size={16} className="text-white/20 group-hover/rec:text-primary-400 group-hover/rec:translate-x-1 transition-all" />
-                                      </div>
-                                  ))}
-                              </div>
+                              {aiInsights.insights.map((item, i) => (
+                                  <div key={i} className="text-xs flex items-start gap-4 text-white/70 leading-relaxed">
+                                      <div className="mt-1 w-2 h-2 rounded-full bg-primary-500 shrink-0"></div>
+                                      <span>{item}</span>
+                                  </div>
+                              ))}
                           </div>
                       </div>
                   ) : (
                       <div className="flex-1 flex flex-col items-center justify-center text-center space-y-8 px-4">
-                          <div className="w-20 h-20 bg-primary-600/5 rounded-full flex items-center justify-center border border-primary-500/10">
-                             <Target size={40} className="text-primary-500 opacity-40" />
-                          </div>
-                          <div className="space-y-2">
-                             <h4 className="text-xl font-black text-white">Pronto para a análise?</h4>
-                             <p className="text-sm text-white/40 leading-relaxed">Libere o poder da inteligência artificial para otimizar seus rendimentos hoje.</p>
-                          </div>
-                          <Button onClick={() => metrics && handleAiInsights(metrics)} variant="secondary" className="w-full bg-white text-black font-black py-6 rounded-[1.5rem] shadow-2xl hover:scale-[1.02] transition-transform">
+                          <Button onClick={() => metrics && handleAiInsights(metrics)} variant="secondary" className="w-full bg-white text-black font-black py-6 rounded-[1.5rem] shadow-2xl">
                             Gerar Relatório Estratégico
                           </Button>
                       </div>
                   )}
                 </div>
-                
-                {aiInsights && (
-                    <div className="px-8 py-5 bg-black/40 border-t border-white/5 flex justify-between items-center">
-                        <div className="flex items-center gap-2 text-[9px] font-bold text-white/20 uppercase tracking-[0.2em]">
-                            <ShieldCheck size={14} className="text-emerald-500" /> Secure Analysis
-                        </div>
-                        <span className="text-[9px] text-white/20 font-black">{new Date(aiInsights.generatedAt).toLocaleTimeString('pt-BR')}</span>
-                    </div>
-                )}
              </Card>
           ) : (
-             <Card className="bg-white dark:bg-gray-900 border-2 border-dashed border-gray-100 dark:border-white/10 h-full flex flex-col items-center justify-center text-center p-12 rounded-[3rem] shadow-sm">
-                <div className="w-24 h-24 bg-gray-50 dark:bg-white/5 rounded-full flex items-center justify-center mb-10 relative">
-                    <Sparkles size={48} className="text-gray-300" />
-                    <div className="absolute top-0 right-0 w-8 h-8 bg-amber-500 rounded-full border-4 border-white dark:border-gray-900 flex items-center justify-center">
-                        <Star size={14} fill="white" className="text-white" />
-                    </div>
-                </div>
-                <h3 className="text-2xl font-black text-gray-900 dark:text-white mb-4 tracking-tight leading-none">Advisor IA</h3>
-                <p className="text-sm text-gray-500 dark:text-gray-400 mb-12 max-w-[260px] leading-relaxed">Tenha uma análise preditiva e estratégica baseada no <span className="text-primary-600 font-black">Gemini 3 Pro</span>.</p>
-                <Button className="w-full bg-primary-600 py-5 text-sm font-black rounded-2xl shadow-2xl shadow-primary-500/30" onClick={() => navigate('/plans')}>Desbloquear Premium</Button>
+             <Card className="bg-white dark:bg-gray-900 border-2 border-dashed border-gray-100 dark:border-white/10 h-full flex flex-col items-center justify-center text-center p-12 rounded-[3rem]">
+                <h3 className="text-2xl font-black text-gray-900 dark:text-white mb-4">Advisor IA</h3>
+                <Button className="w-full bg-primary-600" onClick={() => navigate('/plans')}>Desbloquear Premium</Button>
              </Card>
           )}
         </div>

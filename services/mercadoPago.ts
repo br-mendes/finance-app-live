@@ -1,11 +1,11 @@
-// Nota: Em um ambiente frontend real, a criação de preferências deve ocorrer no backend.
-// Esta implementação segue o modelo solicitado para fins de demonstração/prototipagem rápida.
+import { CheckoutAddress } from '../types';
 
 export interface CheckoutData {
   userId: string;
   userEmail: string;
   userName: string;
   userCPF: string;
+  address: CheckoutAddress;
   planType: 'monthly' | 'annual';
 }
 
@@ -15,16 +15,17 @@ export interface CheckoutResponse {
   sandboxInitPoint?: string;
 }
 
-const MP_ACCESS_TOKEN = process.env.VITE_MERCADO_PAGO_ACCESS_TOKEN || '';
+// Token obtido das credenciais de teste fornecidas (Vendedor)
+const MP_ACCESS_TOKEN = process.env.VITE_MERCADO_PAGO_ACCESS_TOKEN || 'APP_USR-3087166554-TEST';
 
+/**
+ * Cria uma preferência de checkout no Mercado Pago.
+ */
 export const createPremiumCheckout = async (data: CheckoutData): Promise<CheckoutResponse> => {
   try {
     const price = data.planType === 'monthly' ? 19.90 : 179.00;
-    const description = data.planType === 'monthly' 
-      ? 'FinanceApp Premium - Plano Mensal' 
-      : 'FinanceApp Premium - Plano Anual (10% de desconto)';
+    const description = `FinanceApp Premium - ${data.planType === 'monthly' ? 'Plano Mensal' : 'Plano Anual'}`;
 
-    // Chamada direta à API do Mercado Pago (Preferências)
     const response = await fetch('https://api.mercadopago.com/checkout/preferences', {
       method: 'POST',
       headers: {
@@ -36,7 +37,7 @@ export const createPremiumCheckout = async (data: CheckoutData): Promise<Checkou
           {
             id: `premium_${data.planType}`,
             title: description,
-            description: 'Acesso completo ao FinanceApp Premium',
+            description: 'Acesso completo à inteligência financeira FinanceApp.',
             category_id: 'subscriptions',
             quantity: 1,
             currency_id: 'BRL',
@@ -45,10 +46,16 @@ export const createPremiumCheckout = async (data: CheckoutData): Promise<Checkou
         ],
         payer: {
           email: data.userEmail,
-          name: data.userName,
+          name: data.userName.split(' ')[0],
+          surname: data.userName.split(' ').slice(1).join(' '),
           identification: {
             type: 'CPF',
             number: data.userCPF.replace(/\D/g, '')
+          },
+          address: {
+            zip_code: data.address.zipCode.replace(/\D/g, ''),
+            street_name: data.address.street,
+            street_number: parseInt(data.address.number) || 0
           }
         },
         payment_methods: {
@@ -57,56 +64,36 @@ export const createPremiumCheckout = async (data: CheckoutData): Promise<Checkou
         },
         back_urls: {
           success: `${window.location.origin}/#/payment-success`,
-          failure: `${window.location.origin}/#/`,
+          failure: `${window.location.origin}/#/plans`,
           pending: `${window.location.origin}/#/`
         },
         auto_return: 'approved',
-        external_reference: `premium_${data.userId}_${Date.now()}`,
+        external_reference: `user_${data.userId}`,
         binary_mode: true
       })
     });
 
     if (!response.ok) {
-        throw new Error('Falha ao criar preferência no Mercado Pago');
+        const err = await response.json();
+        throw new Error(err.message || 'Erro ao criar preferência');
     }
 
     const result = await response.json();
 
     return {
-      checkoutUrl: result.init_point,
+      checkoutUrl: result.init_point, // Usar sandbox_init_point se em teste estrito
       preferenceId: result.id,
       sandboxInitPoint: result.sandbox_init_point
     };
   } catch (error: any) {
     console.error('Mercado Pago Error:', error);
-    throw new Error(`Falha ao criar checkout: ${error.message}`);
-  }
-};
-
-export const checkPaymentStatus = async (paymentId: string) => {
-  try {
-    const response = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
-        headers: { 'Authorization': `Bearer ${MP_ACCESS_TOKEN}` }
-    });
-    return await response.json();
-  } catch (error) {
-    console.error('Error checking payment:', error);
     throw error;
   }
 };
 
-export const initMercadoPagoSDK = () => {
-  return new Promise((resolve) => {
-    if ((window as any).MercadoPago) {
-        resolve(new (window as any).MercadoPago(process.env.VITE_MERCADO_PAGO_PUBLIC_KEY, { locale: 'pt-BR' }));
-        return;
-    }
-    const script = document.createElement('script');
-    script.src = 'https://sdk.mercadopago.com/js/v2';
-    document.body.appendChild(script);
-    script.onload = () => {
-      const mp = new (window as any).MercadoPago(process.env.VITE_MERCADO_PAGO_PUBLIC_KEY, { locale: 'pt-BR' });
-      resolve(mp);
-    };
+export const checkPaymentStatus = async (paymentId: string) => {
+  const response = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
+      headers: { 'Authorization': `Bearer ${MP_ACCESS_TOKEN}` }
   });
+  return await response.json();
 };

@@ -2,7 +2,8 @@
   "name": "FinanceApp Pro",
   "description": "Gestão financeira inteligente com IA Gemini 3, integração Mercado Pago e dashboards avançados.",
   "requestFramePermissions": [
-    "geolocation",
-    "camera"
+    "camera",
+    "microphone",
+    "geolocation"
   ]
 }

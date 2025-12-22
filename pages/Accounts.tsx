@@ -1,345 +1,176 @@
-import React, { useState, useEffect } from 'react';
+
+import React, { useState, useEffect, useCallback } from 'react';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Modal } from '../components/ui/Modal';
 import { useToast } from '../components/ui/Toast';
-import { Plus, Edit2, Trash2, Building2, Wallet, Lock, Crown } from 'lucide-react';
+import { Plus, Building2, Wallet, Trash2, Radio, Sparkles } from 'lucide-react';
 import { Account, AccountType, User, PlanType } from '../types';
-import { dataManager } from '../utils/dataManager';
+import { usePersistentData } from '../hooks/usePersistentData';
+import { supabase } from '../services/supabaseClient';
 
 interface AccountsProps {
     user: User;
 }
 
-const BANK_SUGGESTIONS = [
-    "Nubank", "Itaú", "Bradesco", "Banco do Brasil", "Caixa", "Santander", 
-    "Inter", "C6 Bank", "BTG Pactual", "XP Investimentos", "Banco Original", 
-    "Neon", "Next", "Sicoob", "Sicredi", "Mercado Pago", "PicPay"
-];
-
 const ACCOUNT_TYPE_LABELS: Record<AccountType, string> = {
-    [AccountType.CHECKING]: 'Conta Corrente',
-    [AccountType.SAVINGS]: 'Conta Poupança',
-    [AccountType.PAYMENT]: 'Conta de Pagamentos',
-    [AccountType.PJ]: 'Conta PJ',
+    [AccountType.CHECKING]: 'Corrente',
+    [AccountType.SAVINGS]: 'Poupança',
+    [AccountType.PAYMENT]: 'Digital',
+    [AccountType.PJ]: 'Empresarial',
 };
 
 export const Accounts: React.FC<AccountsProps> = ({ user }) => {
     const { addToast } = useToast();
+    const { loadUserData, setupRealtimeSubscriptions } = usePersistentData();
     const [accounts, setAccounts] = useState<Account[]>([]);
-    
-    // Modal States
+    const [isLive, setIsLive] = useState(false);
     const [isFormModalOpen, setIsFormModalOpen] = useState(false);
-    const [isPremiumModalOpen, setIsPremiumModalOpen] = useState(false);
     
-    // Form States
-    const [editingAccount, setEditingAccount] = useState<Account | null>(null);
     const [formData, setFormData] = useState({
-        institution_name: '',
-        account_type: AccountType.CHECKING,
-        balance: '',
-        updated_at: new Date().toISOString().split('T')[0]
+        institution: '',
+        type: AccountType.CHECKING,
+        balance: ''
     });
 
-    const isFreePlan = user.plan === PlanType.FREE;
+    const fetchData = useCallback(async () => {
+        const data = await loadUserData();
+        setAccounts(data.accounts);
+    }, [loadUserData]);
 
-    // Load Data
     useEffect(() => {
-        const stored = dataManager.getAccounts();
-        if (stored.length > 0) {
-            setAccounts(stored);
-        } else {
-            const initial = [{
-                id: '1',
-                user_id: user.id,
-                account_type: AccountType.CHECKING,
-                institution_name: 'Nubank',
-                balance: 1250.50,
-                updated_at: new Date().toISOString(),
-                created_at: new Date().toISOString()
-            }];
-            setAccounts(initial);
-            localStorage.setItem('financeapp_accounts', JSON.stringify(initial));
-        }
-    }, [user.id]);
-
-    // Helper: Reset Form
-    const resetForm = () => {
-        setFormData({
-            institution_name: '',
-            account_type: AccountType.CHECKING,
-            balance: '',
-            updated_at: new Date().toISOString().split('T')[0]
+        fetchData();
+        const cleanup = setupRealtimeSubscriptions(() => {
+            setIsLive(true);
+            fetchData();
+            setTimeout(() => setIsLive(false), 2000);
         });
-        setEditingAccount(null);
-    };
+        return cleanup;
+    }, [fetchData, setupRealtimeSubscriptions]);
 
-    // Helper: Open Form (Check Limits)
-    const handleOpenForm = (accountToEdit?: Account) => {
-        if (!accountToEdit && isFreePlan && accounts.length >= 1) {
-            setIsPremiumModalOpen(true);
-            return;
-        }
-
-        if (accountToEdit) {
-            setEditingAccount(accountToEdit);
-            setFormData({
-                institution_name: accountToEdit.institution_name,
-                account_type: accountToEdit.account_type,
-                balance: accountToEdit.balance.toString(),
-                updated_at: new Date(accountToEdit.updated_at).toISOString().split('T')[0]
-            });
-        } else {
-            resetForm();
-        }
-        setIsFormModalOpen(true);
-    };
-
-    // Helper: Save Form
-    const handleSave = () => {
-        if (!formData.institution_name || !formData.balance) {
-            addToast("Instituição e Saldo são obrigatórios.", "error");
-            return;
-        }
-
-        const balanceNum = parseFloat(formData.balance.replace(',', '.'));
-        let updatedAccounts;
+    const handleSave = async () => {
+        if (!formData.institution || !formData.balance) return;
         
-        if (editingAccount) {
-            updatedAccounts = accounts.map(acc => 
-                acc.id === editingAccount.id 
-                ? { 
-                    ...acc, 
-                    institution_name: formData.institution_name, 
-                    account_type: formData.account_type, 
-                    balance: balanceNum, 
-                    updated_at: new Date(formData.updated_at).toISOString() 
-                  } 
-                : acc
-            );
-            addToast("Conta atualizada com sucesso!", "success");
-        } else {
-            const newAccount: Account = {
-                id: Date.now().toString(),
+        try {
+            const accData = {
                 user_id: user.id,
-                institution_name: formData.institution_name,
-                account_type: formData.account_type,
-                balance: balanceNum,
-                updated_at: new Date(formData.updated_at).toISOString(),
+                institution_name: formData.institution,
+                account_type: formData.type,
+                balance: parseFloat(formData.balance),
                 created_at: new Date().toISOString()
             };
-            updatedAccounts = [...accounts, newAccount];
-            addToast("Conta cadastrada com sucesso!", "success");
-        }
 
-        setAccounts(updatedAccounts);
-        localStorage.setItem('financeapp_accounts', JSON.stringify(updatedAccounts));
-        setIsFormModalOpen(false);
-        resetForm();
-    };
-
-    // Helper: Delete
-    const handleDelete = (id: string) => {
-        if (window.confirm("Tem certeza que deseja remover esta conta?")) {
-            const updated = accounts.filter(a => a.id !== id);
-            setAccounts(updated);
-            localStorage.setItem('financeapp_accounts', JSON.stringify(updated));
-            addToast("Conta removida com sucesso.", "info");
+            await supabase.from('accounts').insert([accData]);
+            addToast("Conta adicionada com sucesso!", "success");
+            setIsFormModalOpen(false);
+            setFormData({ institution: '', type: AccountType.CHECKING, balance: '' });
+        } catch (error) {
+            addToast("Falha ao salvar conta", "error");
         }
     };
 
-    // Helper: Bank Styling
-    const getBankStyle = (name: string) => {
-        const n = name.toLowerCase();
-        if (n.includes('nubank')) return 'bg-purple-600 text-white';
-        if (n.includes('itaú') || n.includes('itau')) return 'bg-orange-600 text-white';
-        if (n.includes('bradesco')) return 'bg-red-600 text-white';
-        if (n.includes('brasil')) return 'bg-yellow-400 text-blue-900';
-        if (n.includes('caixa')) return 'bg-blue-600 text-white';
-        if (n.includes('santander')) return 'bg-red-700 text-white';
-        if (n.includes('inter')) return 'bg-orange-400 text-white';
-        if (n.includes('c6')) return 'bg-gray-900 text-white';
-        return 'bg-gray-100 text-gray-600';
+    const handleDelete = async (id: string) => {
+        if (confirm("Remover conta permanentemente?")) {
+            await supabase.from('accounts').update({ deleted_at: new Date().toISOString() }).eq('id', id);
+            addToast("Conta removida", "info");
+        }
     };
 
     return (
-        <div className="space-y-6">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div>
-                    <h1 className="text-2xl font-bold text-gray-900">Minhas Contas</h1>
-                    <p className="text-sm text-gray-500">Gerencie seus saldos bancários</p>
+        <div className="space-y-8 max-w-7xl mx-auto pb-24">
+            <div className="flex justify-between items-center">
+                <div className="flex items-center gap-4">
+                    <div>
+                        <h1 className="text-3xl font-black text-gray-900 dark:text-white tracking-tight">Patrimônio</h1>
+                        <p className="text-sm text-gray-500 font-medium">Suas fontes de liquidez.</p>
+                    </div>
+                    {isLive && (
+                        <div className="flex items-center gap-1.5 bg-emerald-50 text-emerald-600 text-[10px] font-black px-3 py-1 rounded-full uppercase border border-emerald-100 animate-pulse">
+                            <Radio size={12} /> Live Sync
+                        </div>
+                    )}
                 </div>
-                <Button onClick={() => handleOpenForm()}>
-                    <Plus size={18} className="mr-2" />
-                    Nova Conta
+                <Button onClick={() => setIsFormModalOpen(true)} className="h-12 bg-primary-600 hover:bg-primary-700 shadow-xl shadow-primary-500/20 px-8">
+                    <Plus size={20} className="mr-2" /> Adicionar Conta
                 </Button>
             </div>
 
-            {isFreePlan && (
-                <div className="bg-blue-50 border-l-4 border-blue-400 p-4 rounded-r flex items-center justify-between">
-                    <div className="flex items-center">
-                         <div className="flex-shrink-0">
-                            <Wallet className="h-5 w-5 text-blue-400" />
-                        </div>
-                        <div className="ml-3">
-                            <p className="text-sm text-blue-700">
-                                Plano Free: <span className="font-bold">{accounts.length}</span>/1 conta utilizada.
-                            </p>
-                        </div>
-                    </div>
-                    {accounts.length >= 1 && (
-                         <span className="text-xs font-semibold text-blue-600 bg-blue-100 px-2 py-1 rounded">Limite Atingido</span>
-                    )}
-                </div>
-            )}
-
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                {accounts.map((account) => (
-                    <Card key={account.id} className="relative group hover:shadow-md transition-shadow">
-                        <div className="absolute top-4 right-4 opacity-100 flex gap-2 z-10">
-                             <button 
-                                onClick={(e) => { e.stopPropagation(); handleOpenForm(account); }}
-                                className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                                title="Editar"
-                             >
-                                <Edit2 size={16} />
-                             </button>
-                             <button 
-                                onClick={(e) => { e.stopPropagation(); handleDelete(account.id); }}
-                                className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
-                                title="Deletar"
-                             >
-                                <Trash2 size={16} />
-                             </button>
-                        </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {accounts.map(acc => (
+                    <Card key={acc.id} className="group relative bg-white dark:bg-gray-800 border-none shadow-sm hover:shadow-xl transition-all p-8 rounded-[2.5rem] overflow-hidden">
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-primary-500/5 rounded-full -mr-10 -mt-10 group-hover:scale-110 transition-transform"></div>
                         
-                        <div className="flex items-center gap-4 mb-4">
-                            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-sm ${getBankStyle(account.institution_name)}`}>
-                                <Building2 size={24} />
+                        <div className="flex items-center justify-between mb-8 relative z-10">
+                            <div className="w-14 h-14 bg-gray-50 dark:bg-gray-900 rounded-2xl flex items-center justify-center text-primary-600 shadow-inner">
+                                <Building2 size={28} />
                             </div>
-                            <div>
-                                <h3 className="font-bold text-gray-900 line-clamp-1">{account.institution_name}</h3>
-                                <p className="text-sm text-gray-500">{ACCOUNT_TYPE_LABELS[account.account_type]}</p>
-                            </div>
+                            <button onClick={() => handleDelete(acc.id)} className="p-2 text-gray-300 hover:text-rose-500 transition-colors opacity-0 group-hover:opacity-100">
+                                <Trash2 size={18} />
+                            </button>
                         </div>
 
-                        <div className="mt-6">
-                            <p className="text-xs text-gray-500 uppercase tracking-wider font-semibold">Saldo Atual</p>
-                            <p className="text-2xl font-bold text-gray-900 mt-1">
-                                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(account.balance)}
+                        <div className="relative z-10">
+                            <h3 className="text-xl font-black text-gray-900 dark:text-white mb-1">{acc.institution_name}</h3>
+                            <span className="text-[10px] font-black uppercase text-gray-400 tracking-[0.2em]">{ACCOUNT_TYPE_LABELS[acc.account_type]}</span>
+                        </div>
+
+                        <div className="mt-10 pt-6 border-t border-gray-50 dark:border-gray-700 relative z-10">
+                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Saldo Disponível</p>
+                            <p className="text-3xl font-black text-gray-900 dark:text-white">
+                                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(acc.balance)}
                             </p>
-                        </div>
-
-                        <div className="mt-4 pt-4 border-t border-gray-100 flex justify-between items-center text-xs text-gray-400">
-                            <span>Atualizado em: {new Date(account.updated_at).toLocaleDateString()}</span>
                         </div>
                     </Card>
                 ))}
 
                 {accounts.length === 0 && (
-                    <button 
-                        onClick={() => handleOpenForm()}
-                        className="flex flex-col items-center justify-center h-48 border-2 border-dashed border-gray-300 rounded-xl hover:border-primary-500 hover:bg-primary-50 transition-all group"
-                    >
-                        <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mb-3 group-hover:bg-primary-100 group-hover:text-primary-600 transition-colors">
-                            <Plus size={24} className="text-gray-400 group-hover:text-primary-600" />
+                    <Card className="flex flex-col items-center justify-center text-center p-12 border-2 border-dashed border-gray-200 dark:border-gray-700 bg-transparent rounded-[2.5rem]">
+                        <div className="w-16 h-16 bg-gray-50 dark:bg-gray-800 rounded-full flex items-center justify-center mb-4 text-gray-300">
+                            <Wallet size={32} />
                         </div>
-                        <p className="font-medium text-gray-500 group-hover:text-primary-700">Adicionar primeira conta</p>
-                    </button>
+                        <h3 className="font-black text-gray-900 dark:text-white">Nenhuma conta ativa</h3>
+                        <p className="text-xs text-gray-400 mt-2 max-w-[200px]">Conecte suas instituições para começar o rastreio.</p>
+                    </Card>
                 )}
             </div>
 
-            <Modal
-                isOpen={isFormModalOpen}
-                onClose={() => setIsFormModalOpen(false)}
-                title={editingAccount ? "Editar Conta" : "Nova Conta"}
-                footer={
-                    <>
-                        <Button onClick={handleSave}>Salvar</Button>
-                        <Button variant="secondary" onClick={() => setIsFormModalOpen(false)} className="mr-3">Cancelar</Button>
-                    </>
-                }
-            >
-                <div className="space-y-4">
+            <Modal isOpen={isFormModalOpen} onClose={() => setIsFormModalOpen(false)} title="Conectar Instituição">
+                <div className="space-y-6">
                     <div>
-                        <label className="block text-sm font-medium text-gray-700">Tipo de Conta</label>
-                        <select 
-                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm border p-2"
-                            value={formData.account_type}
-                            onChange={(e) => setFormData({...formData, account_type: e.target.value as AccountType})}
-                        >
-                            <option value={AccountType.CHECKING}>Corrente</option>
-                            <option value={AccountType.SAVINGS}>Poupança</option>
-                            <option value={AccountType.PAYMENT}>Pagamento</option>
-                            <option value={AccountType.PJ}>Pessoa Jurídica (PJ)</option>
-                        </select>
-                    </div>
-
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700">Instituição Financeira</label>
+                        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Nome do Banco</label>
                         <input 
-                            list="banks" 
                             type="text" 
-                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm border p-2"
-                            placeholder="Busque ou digite..."
-                            value={formData.institution_name}
-                            onChange={(e) => setFormData({...formData, institution_name: e.target.value})}
+                            className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-primary-500 outline-none"
+                            placeholder="Ex: Nubank, Itaú..."
+                            value={formData.institution}
+                            onChange={(e) => setFormData({...formData, institution: e.target.value})}
                         />
-                        <datalist id="banks">
-                            {BANK_SUGGESTIONS.map(bank => <option key={bank} value={bank} />)}
-                        </datalist>
                     </div>
-
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-sm font-medium text-gray-700">Saldo Atual (R$)</label>
+                            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Tipo de Conta</label>
+                            <select 
+                                className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-primary-500 outline-none"
+                                value={formData.type}
+                                onChange={(e) => setFormData({...formData, type: e.target.value as AccountType})}
+                            >
+                                {Object.entries(ACCOUNT_TYPE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Saldo Atual</label>
                             <input 
                                 type="number" 
-                                step="0.01"
-                                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm border p-2"
-                                placeholder="0,00"
+                                className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-primary-500 outline-none"
+                                placeholder="0.00"
                                 value={formData.balance}
                                 onChange={(e) => setFormData({...formData, balance: e.target.value})}
                             />
                         </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700">Data do Saldo</label>
-                            <input 
-                                type="date" 
-                                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm border p-2"
-                                value={formData.updated_at}
-                                onChange={(e) => setFormData({...formData, updated_at: e.target.value})}
-                            />
-                        </div>
                     </div>
-                </div>
-            </Modal>
-
-            <Modal
-                isOpen={isPremiumModalOpen}
-                onClose={() => setIsPremiumModalOpen(false)}
-                title="Limite Atingido 🔒"
-                footer={
-                    <div className="w-full flex flex-col sm:flex-row gap-2">
-                        <Button className="w-full sm:w-auto flex-1 bg-gradient-to-r from-amber-400 to-yellow-600 border-none">
-                            <Crown size={16} className="mr-2" />
-                            Quero ser Premium
-                        </Button>
-                        <Button variant="secondary" onClick={() => setIsPremiumModalOpen(false)} className="w-full sm:w-auto">
-                            Fechar
-                        </Button>
-                    </div>
-                }
-            >
-                <div className="text-center py-4">
-                    <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-amber-100 mb-4">
-                        <Lock className="h-8 w-8 text-amber-600" />
-                    </div>
-                    <h3 className="text-lg font-medium text-gray-900">Desbloqueie Contas Ilimitadas</h3>
-                    <p className="mt-2 text-sm text-gray-500">
-                        No plano Free, você pode gerenciar apenas 1 conta bancária. 
-                        Faça o upgrade para Premium e cadastre quantas contas quiser, além de desbloquear gráficos avançados.
-                    </p>
+                    <Button fullWidth size="lg" onClick={handleSave} className="py-4 shadow-xl shadow-primary-500/20">
+                        Confirmar Conexão
+                    </Button>
                 </div>
             </Modal>
         </div>

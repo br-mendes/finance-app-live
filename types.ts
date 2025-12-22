@@ -1,6 +1,17 @@
+
 export enum PlanType {
   FREE = 'free',
   PREMIUM = 'premium'
+}
+
+export interface CheckoutAddress {
+  street: string;
+  number: string;
+  complement?: string;
+  neighborhood: string;
+  city: string;
+  state: string;
+  zipCode: string;
 }
 
 export interface User {
@@ -9,7 +20,8 @@ export interface User {
   first_name: string;
   last_name: string;
   cpf: string; 
-  address?: string;
+  // Allow address to be a structured object or a string for backward compatibility
+  address?: CheckoutAddress | string; 
   avatar_url?: string;
   plan: PlanType;
   plan_start_date?: string;
@@ -113,11 +125,6 @@ export interface Payment {
   status: PaymentStatus;
   plan: PlanType;
   created_at: string;
-}
-
-export interface FinancialHealth {
-  status: 'healthy' | 'attention' | 'critical';
-  message: string;
 }
 
 export interface MenuItem {
