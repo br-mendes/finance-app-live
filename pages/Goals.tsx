@@ -25,6 +25,7 @@ export const Goals: React.FC = () => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [depositGoalId, setDepositGoalId] = useState<string | null>(null);
   const [depositAmount, setDepositAmount] = useState('');
+  const [depositSaving, setDepositSaving] = useState(false);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -143,11 +144,18 @@ export const Goals: React.FC = () => {
       addToast('Informe um valor válido.', 'error');
       return;
     }
-    const goal = goals.find(g => g.id === depositGoalId);
-    if (!goal) return;
-
-    const newAmount = (goal.current_amount || 0) + amount;
+    if (depositSaving) return;
+    setDepositSaving(true);
     try {
+      // Fetch fresh value from DB to avoid read-modify-write race condition
+      const { data: fresh, error: fetchError } = await supabase
+        .from('goals')
+        .select('current_amount')
+        .eq('id', depositGoalId)
+        .single();
+      if (fetchError) throw fetchError;
+
+      const newAmount = (fresh?.current_amount || 0) + amount;
       const { error } = await supabase
         .from('goals')
         .update({ current_amount: newAmount, updated_at: new Date().toISOString() })
@@ -158,6 +166,8 @@ export const Goals: React.FC = () => {
       fetchGoals();
     } catch {
       addToast('Erro ao registrar depósito.', 'error');
+    } finally {
+      setDepositSaving(false);
     }
   };
 
@@ -397,8 +407,8 @@ export const Goals: React.FC = () => {
         title="Adicionar à Meta"
         footer={
           <>
-            <Button onClick={handleDeposit}>Confirmar</Button>
-            <Button variant="secondary" onClick={() => setIsDepositModalOpen(false)} className="mr-3">Cancelar</Button>
+            <Button onClick={handleDeposit} loading={depositSaving}>Confirmar</Button>
+            <Button variant="secondary" onClick={() => setIsDepositModalOpen(false)} className="mr-3" disabled={depositSaving}>Cancelar</Button>
           </>
         }
       >
