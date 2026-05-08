@@ -3,7 +3,6 @@ import { createPremiumCheckout, CheckoutData } from '../../services/mercadoPago'
 import { User, CheckoutAddress } from '../../types';
 import { useToast } from '../ui/Toast';
 import { Crown, Sparkles, Loader2 } from 'lucide-react';
-import { logAction } from '../../services/supabaseClient';
 
 interface CheckoutButtonProps {
   user: User;
@@ -36,8 +35,6 @@ export const CheckoutButton: React.FC<CheckoutButtonProps> = ({
     setLoading(true);
     
     try {
-      await logAction(user.id, 'INITIATE_CHECKOUT', { planType });
-
       const checkoutData: CheckoutData = {
         userId: user.id,
         userEmail: user.email,

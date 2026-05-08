@@ -2,25 +2,23 @@
 import React, { useState, useEffect } from 'react';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
-import { User, PlanType } from '../types';
-import { 
-    RefreshCw, ExternalLink, Calendar, Crown, 
+import { useAuth } from '../hooks/useAuth';
+import { PlanType } from '../types';
+import {
+    RefreshCw, ExternalLink, Crown,
     AlertTriangle, Globe, Sparkles, ChevronRight, Target,
     Newspaper, Info
 } from 'lucide-react';
 import { analyzeMarketNews, MarketAnalysis } from '../services/gemini/insights';
 
-interface RadarProps {
-    user: User;
-}
-
-export const Radar: React.FC<RadarProps> = ({ user }) => {
+export const Radar: React.FC = () => {
+    const { user } = useAuth();
     const [analysis, setAnalysis] = useState<MarketAnalysis | null>(null);
     const [loading, setLoading] = useState(false);
     const [lastUpdated, setLastUpdated] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
 
-    const isPremium = user.plan === PlanType.PREMIUM;
+    const isPremium = user?.plan === PlanType.PREMIUM;
 
     useEffect(() => {
         if (isPremium) {
@@ -48,9 +46,8 @@ export const Radar: React.FC<RadarProps> = ({ user }) => {
             
             localStorage.setItem('financeapp_radar_analysis', JSON.stringify(result));
             localStorage.setItem('financeapp_radar_time', now);
-        } catch (err: any) {
-            console.error("Market Data Error:", err);
-            setError("Não foi possível conectar com o servidor de notícias em tempo real.");
+        } catch {
+            setError('Não foi possível conectar com o servidor de notícias em tempo real.');
         } finally {
             setLoading(false);
         }

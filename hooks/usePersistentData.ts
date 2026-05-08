@@ -61,7 +61,6 @@ export const usePersistentData = () => {
           filter: `user_id=eq.${user.id}`
         }, 
         (payload) => {
-          console.debug('DB Change Received:', payload.table, payload.eventType);
           onUpdate(payload);
         }
       )

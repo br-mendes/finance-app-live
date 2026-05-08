@@ -37,8 +37,8 @@ export const generateFinancialInsights = async (
 ): Promise<FinancialInsights> => {
   try {
     // Inicialização mandatória a cada chamada para capturar a chave de API mais recente do ambiente
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-    
+    const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY || '' });
+
     const prompt = `Analise o perfil financeiro de ${userData.name} (Plano: ${userData.plan}).
     Dados do Mês: Renda R$ ${userData.monthlyIncome}, Gastos R$ ${userData.monthlyExpenses}, Saldo R$ ${userData.totalBalance}.
     Saúde: Poupança ${userData.savingsRate.toFixed(1)}%, Uso de Crédito ${userData.creditUtilization.toFixed(1)}%.
@@ -89,7 +89,7 @@ export const generateFinancialInsights = async (
  */
 export const analyzeMarketNews = async (query: string): Promise<MarketAnalysis> => {
   try {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY || '' });
     const response = await ai.models.generateContent({
       model: 'gemini-3-pro-preview',
       contents: `Analise as notícias e tendências mais recentes do mercado financeiro focando em: ${query}. Destaque Selic, inflação e câmbio.`,

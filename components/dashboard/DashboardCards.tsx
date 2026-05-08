@@ -96,8 +96,7 @@ export const DashboardCards: React.FC = () => {
 
       setCards(newCards);
       setLastUpdated(new Date());
-    } catch (error) {
-      console.error('Error loading dashboard cards:', error);
+    } catch {
       addToast('Erro ao carregar métricas do dashboard', 'error');
     } finally {
       setLoading(false);

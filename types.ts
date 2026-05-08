@@ -1,3 +1,4 @@
+import React from 'react';
 
 export enum PlanType {
   FREE = 'free',
@@ -130,7 +131,7 @@ export interface Payment {
 export interface MenuItem {
   id: string;
   label: string;
-  icon: any; 
+  icon: React.ComponentType<{ size?: number; className?: string }>;
   path: string;
   premiumOnly?: boolean;
 }

@@ -24,8 +24,8 @@ export const FinancialHealth: React.FC = () => {
       setLoading(true);
       const data = await calculateFinancialHealth(user.id);
       setHealth(data);
-    } catch (error) {
-      console.error('Health Calculation Error:', error);
+    } catch {
+      // health calculation failed
     } finally {
       setLoading(false);
     }
