@@ -35,8 +35,8 @@ export const Dashboard: React.FC = () => {
     try {
         const m = await calculateDashboardMetrics(user.id);
         setMetrics(m);
-    } catch (err) {
-        console.error("Dashboard Sync Error:", err);
+    } catch {
+        // metrics fetch failed silently
     }
   }, [user?.id]);
 

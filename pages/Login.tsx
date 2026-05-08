@@ -145,7 +145,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
             <div className="mt-4 text-center text-sm text-gray-600">
               Não tem uma conta?{' '}
               <button
-                onClick={() => navigate('/signup')}
+                onClick={() => navigate('/register')}
                 className="text-blue-600 hover:text-blue-800 font-bold transition-colors"
               >
                 Cadastre-se

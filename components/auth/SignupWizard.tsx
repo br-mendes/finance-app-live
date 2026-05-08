@@ -14,7 +14,6 @@ import { formatCPF, isValidEmail, isValidCPF } from '../../utils/validators';
 import { PlanType, CheckoutAddress, User } from '../../types';
 import { createPremiumCheckout } from '../../services/mercadoPago';
 import { PayPalCheckoutButton } from '../payment/PayPalCheckoutButton';
-import { logAction } from '../../services/supabaseClient';
 // Fix: Import MOCK_USER from constants to resolve reference error
 import { MOCK_USER } from '../../constants';
 
@@ -138,8 +137,6 @@ export const SignupWizard: React.FC<{ onLogin: (user: any) => void }> = ({ onLog
         avatar_url: `https://ui-avatars.com/api/?name=${formData.firstName}+${formData.lastName}&background=0ea5e9&color=fff`
       };
 
-      await logAction(userId, 'USER_REGISTERED', { plan: formData.plan });
-      
       onLogin(newUser);
       addToast("Bem-vindo ao FinanceApp! 🎉", "success");
       navigate('/');
