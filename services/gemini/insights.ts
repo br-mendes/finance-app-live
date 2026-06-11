@@ -1,4 +1,6 @@
-import { GoogleGenAI, Type } from "@google/genai";
+// As chamadas Gemini rodam no endpoint serverless /api/gemini — a chave de
+// API vive apenas no servidor. Este módulo mantém as interfaces e os
+// fallbacks usados pelas páginas.
 
 export interface FinancialInsights {
   summary: string;
@@ -17,9 +19,31 @@ export interface MarketAnalysis {
   sources?: { title: string; uri: string }[];
 }
 
+/** Faz POST para `/api/gemini` e lança erro descritivo em respostas não-2xx. */
+const callGeminiApi = async (payload: Record<string, any>) => {
+  const response = await fetch('/api/gemini', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    let detail: string;
+    try {
+      const body = await response.json();
+      detail = body.error || JSON.stringify(body);
+    } catch {
+      detail = await response.text();
+    }
+    throw new Error(`Gemini API error ${response.status} ${response.statusText}: ${detail}`);
+  }
+
+  return await response.json();
+};
+
 /**
- * Gera insights financeiros premium utilizando o modelo Gemini 3 Pro.
- * Implementa validação rígida de schema para garantir respostas JSON consistentes.
+ * Gera insights financeiros premium utilizando o modelo Gemini 3 Pro
+ * (via endpoint server-side).
  */
 export const generateFinancialInsights = async (
   userData: {
@@ -36,44 +60,7 @@ export const generateFinancialInsights = async (
   }
 ): Promise<FinancialInsights> => {
   try {
-    // Inicialização mandatória a cada chamada para capturar a chave de API mais recente do ambiente
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-    
-    const prompt = `Analise o perfil financeiro de ${userData.name} (Plano: ${userData.plan}).
-    Dados do Mês: Renda R$ ${userData.monthlyIncome}, Gastos R$ ${userData.monthlyExpenses}, Saldo R$ ${userData.totalBalance}.
-    Saúde: Poupança ${userData.savingsRate.toFixed(1)}%, Uso de Crédito ${userData.creditUtilization.toFixed(1)}%.
-    Categorias principais: ${userData.topCategories.map(c => `${c.category} (${c.percentage}%)`).join(', ')}.
-    Metas Ativas: ${userData.goals.length}.`;
-
-    const response = await ai.models.generateContent({
-      model: 'gemini-3-pro-preview',
-      contents: prompt,
-      config: {
-        systemInstruction: "Você é o 'Advisor IA' de elite do FinanceApp. Sua missão é fornecer consultoria técnica, estratégica e motivadora. Analise os dados e retorne um diagnóstico preciso em JSON.",
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            summary: { type: Type.STRING, description: "Resumo executivo da saúde financeira." },
-            insights: { 
-              type: Type.ARRAY, 
-              items: { type: Type.STRING },
-              description: "3 observações profundas sobre padrões de gastos ou oportunidades." 
-            },
-            recommendations: { 
-              type: Type.ARRAY, 
-              items: { type: Type.STRING },
-              description: "Ações imediatas para otimização de capital." 
-            },
-            personalizedTip: { type: Type.STRING, description: "Uma dica bônus curta e impactante." },
-            financialScore: { type: Type.NUMBER, description: "Pontuação de 0 a 100 baseada na saúde financeira." }
-          },
-          required: ["summary", "insights", "recommendations", "personalizedTip", "financialScore"]
-        }
-      }
-    });
-
-    const result = JSON.parse(response.text || '{}');
+    const result = await callGeminiApi({ action: 'insights', userData });
     return {
       ...result,
       generatedAt: new Date()
@@ -85,39 +72,12 @@ export const generateFinancialInsights = async (
 };
 
 /**
- * Realiza análise de mercado em tempo real utilizando Google Search Grounding.
+ * Realiza análise de mercado em tempo real utilizando Google Search Grounding
+ * (via endpoint server-side).
  */
 export const analyzeMarketNews = async (query: string): Promise<MarketAnalysis> => {
   try {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-    const response = await ai.models.generateContent({
-      model: 'gemini-3-pro-preview',
-      contents: `Analise as notícias e tendências mais recentes do mercado financeiro focando em: ${query}. Destaque Selic, inflação e câmbio.`,
-      config: {
-        tools: [{ googleSearch: {} }],
-        systemInstruction: "Você é um Analista Macro Sênior. Use informações reais e atualizadas da web. Retorne exclusivamente JSON estruturado.",
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            marketSummary: { type: Type.STRING },
-            implications: { type: Type.ARRAY, items: { type: Type.STRING } },
-            actionRecommendation: { type: Type.STRING },
-            confidence: { type: Type.NUMBER }
-          },
-          required: ["marketSummary", "implications", "actionRecommendation", "confidence"]
-        }
-      }
-    });
-
-    const data = JSON.parse(response.text || '{}');
-    
-    // Extração obrigatória de fontes para Grounding
-    const sources = response.candidates?.[0]?.groundingMetadata?.groundingChunks
-      ?.filter(chunk => chunk.web)
-      .map(chunk => ({ title: chunk.web!.title, uri: chunk.web!.uri })) || [];
-
-    return { ...data, sources };
+    return await callGeminiApi({ action: 'market-analysis', query });
   } catch (error) {
     console.error('Market analysis grounding error:', error);
     return {
@@ -129,6 +89,7 @@ export const analyzeMarketNews = async (query: string): Promise<MarketAnalysis> 
   }
 };
 
+/** Retorna insights genéricos de fallback quando a chamada à API Gemini falha. */
 const getFallbackInsights = (): FinancialInsights => ({
   summary: "Análise baseada em parâmetros de segurança. Continue registrando suas transações para uma análise mais profunda.",
   insights: [

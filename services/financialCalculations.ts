@@ -36,6 +36,7 @@ export interface MonthlyComparison {
   expenses: ComparisonMetric;
 }
 
+/** Retorna os limites ISO de início e fim do mês relativo a `monthsAgo` meses atrás. */
 const getPeriodBoundaries = (monthsAgo: number = 0) => {
   const now = new Date();
   const start = new Date(now.getFullYear(), now.getMonth() - monthsAgo, 1);
@@ -44,6 +45,7 @@ const getPeriodBoundaries = (monthsAgo: number = 0) => {
   return { start: start.toISOString(), end: end.toISOString() };
 };
 
+/** Agrega saldo, limite, receita, despesas e utilização de crédito do mês corrente. */
 export const calculateDashboardMetrics = async (userId: string): Promise<FinancialMetrics> => {
   const { start, end } = getPeriodBoundaries(0);
   
@@ -82,6 +84,7 @@ export const calculateDashboardMetrics = async (userId: string): Promise<Financi
   };
 };
 
+/** Compara receitas e despesas do mês atual com o mês anterior, calculando variação percentual. */
 export const calculateMonthlyComparison = async (userId: string): Promise<MonthlyComparison> => {
   const current = getPeriodBoundaries(0);
   const previous = getPeriodBoundaries(1);
@@ -117,6 +120,7 @@ export const calculateMonthlyComparison = async (userId: string): Promise<Monthl
   };
 };
 
+/** Calcula o score de saúde financeira (0–100) e recomendações com base nas métricas do mês. */
 export const calculateFinancialHealth = async (userId: string): Promise<FinancialHealth> => {
   const metrics = await calculateDashboardMetrics(userId);
   

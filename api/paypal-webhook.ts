@@ -7,16 +7,29 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY || ''
 );
 
-const PAYPAL_API_URL = process.env.VITE_PAYPAL_ENVIRONMENT === 'sandbox' 
-  ? 'https://api-m.sandbox.paypal.com' 
+const PAYPAL_ENVIRONMENT = process.env.PAYPAL_ENVIRONMENT || process.env.VITE_PAYPAL_ENVIRONMENT || 'sandbox';
+const PAYPAL_CLIENT_ID = process.env.PAYPAL_CLIENT_ID || process.env.VITE_PAYPAL_CLIENT_ID || '';
+const PAYPAL_SECRET_KEY = process.env.PAYPAL_SECRET_KEY || process.env.VITE_PAYPAL_SECRET_KEY || '';
+const PAYPAL_WEBHOOK_ID = process.env.PAYPAL_WEBHOOK_ID || '';
+
+/** Lança erro de configuração se as variáveis obrigatórias do webhook não estiverem definidas. */
+function assertWebhookConfig() {
+  if (!PAYPAL_CLIENT_ID || !PAYPAL_SECRET_KEY || !PAYPAL_WEBHOOK_ID) {
+    throw new Error('PayPal webhook não configurado: PAYPAL_CLIENT_ID, PAYPAL_SECRET_KEY e PAYPAL_WEBHOOK_ID são obrigatórios');
+  }
+}
+
+const PAYPAL_API_URL = PAYPAL_ENVIRONMENT === 'sandbox'
+  ? 'https://api-m.sandbox.paypal.com'
   : 'https://api-m.paypal.com';
 
 /**
  * Valida a assinatura do Webhook diretamente com a API do PayPal
  */
 async function verifyPayPalSignature(headers: any, body: any) {
-  const auth = btoa(`${process.env.VITE_PAYPAL_CLIENT_ID}:${process.env.VITE_PAYPAL_SECRET_KEY}`);
-  
+  assertWebhookConfig();
+  const auth = btoa(`${PAYPAL_CLIENT_ID}:${PAYPAL_SECRET_KEY}`);
+
   const response = await fetch(`${PAYPAL_API_URL}/v1/notifications/verify-webhook-signature`, {
     method: 'POST',
     headers: {
@@ -29,7 +42,7 @@ async function verifyPayPalSignature(headers: any, body: any) {
       transmission_sig: headers['paypal-transmission-sig'],
       cert_url: headers['paypal-cert-url'],
       auth_algo: headers['paypal-auth-algo'],
-      webhook_id: process.env.PAYPAL_WEBHOOK_ID,
+      webhook_id: PAYPAL_WEBHOOK_ID,
       webhook_event: body
     })
   });
@@ -38,6 +51,7 @@ async function verifyPayPalSignature(headers: any, body: any) {
   return verification.verification_status === 'SUCCESS';
 }
 
+/** Endpoint Vercel: recebe e processa eventos de webhook do PayPal após validação de assinatura. */
 export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
@@ -76,6 +90,7 @@ export default async function handler(req: any, res: any) {
   }
 }
 
+/** Atualiza o plano do usuário para Premium após confirmação de pagamento via webhook. */
 async function handlePaymentCompleted(resource: any) {
   // O custom_id é a chave para o UserId e PlanType
   const customId = resource.custom_id;
@@ -107,6 +122,7 @@ async function handlePaymentCompleted(resource: any) {
   console.log(`[Webhook Success] User ${userId} upgraded via Webhook.`);
 }
 
+/** Rebaixa o usuário para o plano gratuito em caso de reembolso ou cancelamento. */
 async function handlePaymentReversed(resource: any) {
   // Localizar o UserId via ID do pagamento original ou custom_id se disponível
   const { data: payment } = await supabase

@@ -1,6 +1,4 @@
-
-const MAILERLITE_API_KEY = process.env.VITE_MAILERLITE_API_KEY || '';
-const MAILERLITE_BASE_URL = 'https://connect.mailerlite.com/api';
+// A chave do MailerLite vive apenas no endpoint serverless /api/email.
 
 export interface EmailData {
   to: string;
@@ -16,30 +14,20 @@ export const EmailTemplates = {
   PASSWORD_RESET: 'password-reset',
 };
 
+/** Insere ou atualiza assinante no MailerLite via `/api/email`. Ignora falhas silenciosamente. */
 export const upsertSubscriber = async (data: { email: string, name?: string, plan?: string }) => {
-  if (!MAILERLITE_API_KEY) return;
   try {
-    await fetch(`${MAILERLITE_BASE_URL}/subscribers`, {
+    await fetch('/api/email', {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${MAILERLITE_API_KEY}`,
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      },
-      body: JSON.stringify({
-        email: data.email,
-        fields: {
-          name: data.name,
-          plan: data.plan
-        },
-        groups: ['financeapp-users']
-      })
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'subscribe', ...data })
     });
   } catch (error) {
     console.error('Error adding subscriber:', error);
   }
 };
 
+/** Simula o envio de e-mail transacional; em produção chamaria a API do MailerLite. */
 export const sendTransactionalEmail = async (data: EmailData) => {
     // Nota: Em um app real, usaríamos a API de transacional do MailerLite ou similar
     // Aqui simulamos o envio registrando o interesse
@@ -47,6 +35,7 @@ export const sendTransactionalEmail = async (data: EmailData) => {
     return true;
 };
 
+/** Adiciona o usuário ao MailerLite e envia o e-mail de boas-vindas de acordo com o plano. */
 export const sendWelcomeEmail = async (userData: {
   email: string;
   name: string;
@@ -61,6 +50,7 @@ export const sendWelcomeEmail = async (userData: {
   });
 };
 
+/** Gera e envia o e-mail de recuperação de senha com token e link de redefinição. */
 export const sendPasswordResetEmail = async (data: {
   to: string;
   name: string;
