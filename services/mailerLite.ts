@@ -14,6 +14,7 @@ export const EmailTemplates = {
   PASSWORD_RESET: 'password-reset',
 };
 
+/** Insere ou atualiza assinante no MailerLite via `/api/email`. Ignora falhas silenciosamente. */
 export const upsertSubscriber = async (data: { email: string, name?: string, plan?: string }) => {
   try {
     await fetch('/api/email', {
@@ -26,6 +27,7 @@ export const upsertSubscriber = async (data: { email: string, name?: string, pla
   }
 };
 
+/** Simula o envio de e-mail transacional; em produção chamaria a API do MailerLite. */
 export const sendTransactionalEmail = async (data: EmailData) => {
     // Nota: Em um app real, usaríamos a API de transacional do MailerLite ou similar
     // Aqui simulamos o envio registrando o interesse
@@ -33,6 +35,7 @@ export const sendTransactionalEmail = async (data: EmailData) => {
     return true;
 };
 
+/** Adiciona o usuário ao MailerLite e envia o e-mail de boas-vindas de acordo com o plano. */
 export const sendWelcomeEmail = async (userData: {
   email: string;
   name: string;
@@ -47,6 +50,7 @@ export const sendWelcomeEmail = async (userData: {
   });
 };
 
+/** Gera e envia o e-mail de recuperação de senha com token e link de redefinição. */
 export const sendPasswordResetEmail = async (data: {
   to: string;
   name: string;

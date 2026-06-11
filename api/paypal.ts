@@ -13,6 +13,7 @@ const API_URL = PAYPAL_ENVIRONMENT === 'sandbox'
 let accessToken: string | null = null;
 let tokenExpiry: Date | null = null;
 
+/** Obtém (ou reutiliza do cache) o access token OAuth 2.0 do PayPal. */
 const getAccessToken = async (): Promise<string> => {
   if (accessToken && tokenExpiry && new Date() < tokenExpiry) {
     return accessToken;
@@ -36,6 +37,7 @@ const getAccessToken = async (): Promise<string> => {
   return accessToken!;
 };
 
+/** Cria uma ordem de pagamento no PayPal e retorna o `orderId` e a URL de aprovação. */
 const createOrder = async (body: any) => {
   const { planType, userId, returnUrl, cancelUrl } = body;
   const token = await getAccessToken();
@@ -84,6 +86,7 @@ const createOrder = async (body: any) => {
   return { orderId: result.id, approvalUrl: approvalLink.href };
 };
 
+/** Captura o pagamento de uma ordem aprovada. Idempotente: ignora RESOURCE_ALREADY_CAPTURED. */
 const captureOrder = async (orderId: string) => {
   const token = await getAccessToken();
   const response = await fetch(`${API_URL}/v2/checkout/orders/${orderId}/capture`, {
@@ -103,6 +106,7 @@ const captureOrder = async (orderId: string) => {
   return result;
 };
 
+/** Retorna os detalhes de uma ordem PayPal pelo `orderId`. Lança erro em respostas não-2xx. */
 const getOrderDetails = async (orderId: string) => {
   const token = await getAccessToken();
   const response = await fetch(`${API_URL}/v2/checkout/orders/${orderId}`, {
@@ -116,6 +120,7 @@ const getOrderDetails = async (orderId: string) => {
   return result;
 };
 
+/** Endpoint Vercel: roteia ações PayPal (create-order, capture-order, order-details). */
 export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 

@@ -19,6 +19,7 @@ export interface MarketAnalysis {
   sources?: { title: string; uri: string }[];
 }
 
+/** Faz POST para `/api/gemini` e lança erro descritivo em respostas não-2xx. */
 const callGeminiApi = async (payload: Record<string, any>) => {
   const response = await fetch('/api/gemini', {
     method: 'POST',
@@ -88,6 +89,7 @@ export const analyzeMarketNews = async (query: string): Promise<MarketAnalysis> 
   }
 };
 
+/** Retorna insights genéricos de fallback quando a chamada à API Gemini falha. */
 const getFallbackInsights = (): FinancialInsights => ({
   summary: "Análise baseada em parâmetros de segurança. Continue registrando suas transações para uma análise mais profunda.",
   insights: [

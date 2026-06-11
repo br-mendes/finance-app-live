@@ -6,6 +6,7 @@ const MP_ACCESS_TOKEN =
   process.env.VITE_MERCADO_PAGO_ACCESS_TOKEN ||
   'APP_USR-3087166554-TEST';
 
+/** Cria uma preferência de checkout no Mercado Pago e retorna a URL de pagamento. */
 const createPreference = async (body: any) => {
   const { data, origin } = body;
   const price = data.planType === 'monthly' ? 19.90 : 179.00;
@@ -71,6 +72,7 @@ const createPreference = async (body: any) => {
   };
 };
 
+/** Consulta o status de um pagamento pelo ID na API do Mercado Pago. */
 const paymentStatus = async (paymentId: string) => {
   const response = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
     headers: { 'Authorization': `Bearer ${MP_ACCESS_TOKEN}` }
@@ -78,6 +80,7 @@ const paymentStatus = async (paymentId: string) => {
   return await response.json();
 };
 
+/** Endpoint Vercel: roteia ações do Mercado Pago (create-preference, payment-status). */
 export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 

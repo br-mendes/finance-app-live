@@ -5,6 +5,7 @@ import { GoogleGenAI, Type } from '@google/genai';
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || process.env.API_KEY || '';
 
+/** Gera diagnóstico financeiro estruturado usando o modelo Gemini via Google GenAI SDK. */
 const generateInsights = async (userData: any) => {
   const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
 
@@ -45,6 +46,7 @@ const generateInsights = async (userData: any) => {
   return JSON.parse(response.text || '{}');
 };
 
+/** Realiza análise de mercado em tempo real usando Google Search Grounding via Gemini. */
 const analyzeMarket = async (query: string) => {
   const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
   const response = await ai.models.generateContent({
@@ -77,6 +79,7 @@ const analyzeMarket = async (query: string) => {
   return { ...data, sources };
 };
 
+/** Endpoint Vercel: expõe as ações `insights` e `market-analysis` do Gemini. */
 export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 

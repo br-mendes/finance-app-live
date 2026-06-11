@@ -38,6 +38,7 @@ export interface CreateOrderData {
   cancelUrl?: string;
 }
 
+/** Faz POST para `/api/paypal` e lança erro em respostas não-2xx. */
 const callApi = async (payload: Record<string, any>) => {
   const response = await fetch('/api/paypal', {
     method: 'POST',
@@ -50,7 +51,7 @@ const callApi = async (payload: Record<string, any>) => {
   return result;
 };
 
-// Criar ordem de pagamento
+/** Cria uma ordem de pagamento no PayPal via serverless e retorna orderId e URL de aprovação. */
 export const createPayPalOrder = async (data: CreateOrderData): Promise<{
   orderId: string;
   approvalUrl: string;
@@ -70,7 +71,7 @@ export const createPayPalOrder = async (data: CreateOrderData): Promise<{
   }
 };
 
-// Capturar pagamento
+/** Captura o pagamento de uma ordem PayPal aprovada pelo usuário. */
 export const capturePayPalOrder = async (orderId: string) => {
   try {
     return await callApi({ action: 'capture-order', orderId });
@@ -80,7 +81,7 @@ export const capturePayPalOrder = async (orderId: string) => {
   }
 };
 
-// Verificar status da ordem
+/** Consulta os detalhes de uma ordem PayPal pelo `orderId`. */
 export const getOrderDetails = async (orderId: string) => {
   try {
     return await callApi({ action: 'order-details', orderId });

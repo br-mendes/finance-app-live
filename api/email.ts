@@ -9,6 +9,7 @@ const ADMIN_EMAIL = 'financeappbr@gmail.com';
 const MAILERLITE_API_KEY = process.env.MAILERLITE_API_KEY || process.env.VITE_MAILERLITE_API_KEY || '';
 const MAILERLITE_BASE_URL = 'https://connect.mailerlite.com/api';
 
+/** Envia um e-mail via SendGrid; retorna `false` sem lançar em caso de falha. */
 const sendEmail = async (to: string, subject: string, html: string): Promise<boolean> => {
   if (!SENDGRID_API_KEY) {
     console.warn('[API Email] SENDGRID_API_KEY ausente — envio ignorado.');
@@ -41,6 +42,7 @@ const sendEmail = async (to: string, subject: string, html: string): Promise<boo
   }
 };
 
+/** Envia e-mail de boas-vindas após o cadastro do usuário. */
 const sendWelcome = async (user: { email: string; first_name: string }) => {
   const subject = `Bem-vindo ao FinanceAPP, ${user.first_name}!`;
   const html = `
@@ -61,6 +63,7 @@ const sendWelcome = async (user: { email: string; first_name: string }) => {
   return sendEmail(user.email, subject, html);
 };
 
+/** Notifica o usuário de que o plano Premium foi ativado com sucesso. */
 const sendPremiumConfirmation = async (user: { email: string; first_name: string }) => {
   const subject = 'Sua assinatura Premium foi ativada! 🌟';
   const html = `
@@ -81,10 +84,12 @@ const sendPremiumConfirmation = async (user: { email: string; first_name: string
   return sendEmail(user.email, subject, html);
 };
 
+/** Escapa caracteres HTML para evitar XSS nos templates de e-mail. */
 const escapeHtml = (v: string) =>
   v.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 
+/** Encaminha mensagem do formulário de contato ao admin e confirma recebimento ao remetente. */
 const sendContactMessage = async (name: string, fromEmail: string, subject: string, message: string) => {
   const sName = escapeHtml(name);
   const sEmail = escapeHtml(fromEmail);
@@ -121,6 +126,7 @@ const sendContactMessage = async (name: string, fromEmail: string, subject: stri
   return adminSent;
 };
 
+/** Insere ou atualiza um assinante no MailerLite. Retorna `false` se a API retornar erro. */
 const upsertSubscriber = async (data: { email: string; name?: string; plan?: string }) => {
   if (!MAILERLITE_API_KEY) return false;
   try {
@@ -148,6 +154,7 @@ const upsertSubscriber = async (data: { email: string; name?: string; plan?: str
   }
 };
 
+/** Endpoint Vercel: roteia ações de e-mail (welcome, premium-confirmation, contact, subscribe). */
 export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 

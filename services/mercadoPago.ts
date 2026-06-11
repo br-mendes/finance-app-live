@@ -45,6 +45,7 @@ export const createPremiumCheckout = async (data: CheckoutData): Promise<Checkou
   }
 };
 
+/** Consulta o status de um pagamento via serverless; lança erro em respostas não-2xx. */
 export const checkPaymentStatus = async (paymentId: string) => {
   const response = await fetch('/api/mercadopago', {
     method: 'POST',

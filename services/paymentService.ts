@@ -102,6 +102,7 @@ export const paymentService = {
     }
   },
 
+  /** Cancela a assinatura do usuário e rebaixa o plano para `free` no Supabase. */
   async cancelSubscription(userId: string) {
       // Simulate API call to cancel in Mercado Pago
       await new Promise(resolve => setTimeout(resolve, 800));

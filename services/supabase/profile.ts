@@ -1,5 +1,6 @@
 import { supabase } from '../supabaseClient';
 
+/** Faz upload do avatar para o Storage do Supabase e atualiza a URL no banco de dados. */
 export const updateUserAvatar = async (userId: string, file: File) => {
   try {
     // 1. Upload para Storage do Supabase (Bucket 'avatars')
