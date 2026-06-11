@@ -10,6 +10,13 @@ const supabase = createClient(
 const PAYPAL_ENVIRONMENT = process.env.PAYPAL_ENVIRONMENT || process.env.VITE_PAYPAL_ENVIRONMENT || 'sandbox';
 const PAYPAL_CLIENT_ID = process.env.PAYPAL_CLIENT_ID || process.env.VITE_PAYPAL_CLIENT_ID || '';
 const PAYPAL_SECRET_KEY = process.env.PAYPAL_SECRET_KEY || process.env.VITE_PAYPAL_SECRET_KEY || '';
+const PAYPAL_WEBHOOK_ID = process.env.PAYPAL_WEBHOOK_ID || '';
+
+function assertWebhookConfig() {
+  if (!PAYPAL_CLIENT_ID || !PAYPAL_SECRET_KEY || !PAYPAL_WEBHOOK_ID) {
+    throw new Error('PayPal webhook não configurado: PAYPAL_CLIENT_ID, PAYPAL_SECRET_KEY e PAYPAL_WEBHOOK_ID são obrigatórios');
+  }
+}
 
 const PAYPAL_API_URL = PAYPAL_ENVIRONMENT === 'sandbox'
   ? 'https://api-m.sandbox.paypal.com'
@@ -19,8 +26,9 @@ const PAYPAL_API_URL = PAYPAL_ENVIRONMENT === 'sandbox'
  * Valida a assinatura do Webhook diretamente com a API do PayPal
  */
 async function verifyPayPalSignature(headers: any, body: any) {
+  assertWebhookConfig();
   const auth = btoa(`${PAYPAL_CLIENT_ID}:${PAYPAL_SECRET_KEY}`);
-  
+
   const response = await fetch(`${PAYPAL_API_URL}/v1/notifications/verify-webhook-signature`, {
     method: 'POST',
     headers: {
@@ -33,7 +41,7 @@ async function verifyPayPalSignature(headers: any, body: any) {
       transmission_sig: headers['paypal-transmission-sig'],
       cert_url: headers['paypal-cert-url'],
       auth_algo: headers['paypal-auth-algo'],
-      webhook_id: process.env.PAYPAL_WEBHOOK_ID,
+      webhook_id: PAYPAL_WEBHOOK_ID,
       webhook_event: body
     })
   });

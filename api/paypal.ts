@@ -111,7 +111,9 @@ const getOrderDetails = async (orderId: string) => {
       'Content-Type': 'application/json'
     }
   });
-  return await response.json();
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.message || `Erro ao consultar ordem ${orderId} no PayPal (${response.status})`);
+  return result;
 };
 
 export default async function handler(req: any, res: any) {

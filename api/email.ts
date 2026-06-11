@@ -81,15 +81,24 @@ const sendPremiumConfirmation = async (user: { email: string; first_name: string
   return sendEmail(user.email, subject, html);
 };
 
+const escapeHtml = (v: string) =>
+  v.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+   .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+
 const sendContactMessage = async (name: string, fromEmail: string, subject: string, message: string) => {
-  const emailSubject = `[Contato FinanceAPP] ${subject}`;
+  const sName = escapeHtml(name);
+  const sEmail = escapeHtml(fromEmail);
+  const sSubject = escapeHtml(subject);
+  const sMessage = escapeHtml(message);
+
+  const emailSubject = `[Contato FinanceAPP] ${sSubject}`;
   const htmlAdmin = `
     <div style="font-family: sans-serif; color: #333;">
       <h2 style="color: #0ea5e9;">Nova Mensagem de Contato</h2>
-      <p><strong>De:</strong> ${name} (${fromEmail})</p>
-      <p><strong>Assunto:</strong> ${subject}</p>
+      <p><strong>De:</strong> ${sName} (${sEmail})</p>
+      <p><strong>Assunto:</strong> ${sSubject}</p>
       <hr/>
-      <p style="white-space: pre-wrap;">${message}</p>
+      <p style="white-space: pre-wrap;">${sMessage}</p>
     </div>
   `;
 
@@ -99,14 +108,14 @@ const sendContactMessage = async (name: string, fromEmail: string, subject: stri
     const htmlUser = `
       <div style="font-family: sans-serif; color: #333;">
         <h2 style="color: #0ea5e9;">Recebemos sua mensagem!</h2>
-        <p>Olá ${name},</p>
+        <p>Olá ${sName},</p>
         <p>Obrigado por entrar em contato. Nossa equipe analisará sua mensagem e retornará em breve.</p>
         <hr/>
         <p><strong>Sua mensagem:</strong></p>
-        <p><em>${message}</em></p>
+        <p><em>${sMessage}</em></p>
       </div>
     `;
-    await sendEmail(fromEmail, `Recebemos seu contato: ${subject}`, htmlUser);
+    await sendEmail(fromEmail, `Recebemos seu contato: ${sSubject}`, htmlUser);
   }
 
   return adminSent;
@@ -115,7 +124,7 @@ const sendContactMessage = async (name: string, fromEmail: string, subject: stri
 const upsertSubscriber = async (data: { email: string; name?: string; plan?: string }) => {
   if (!MAILERLITE_API_KEY) return false;
   try {
-    await fetch(`${MAILERLITE_BASE_URL}/subscribers`, {
+    const response = await fetch(`${MAILERLITE_BASE_URL}/subscribers`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${MAILERLITE_API_KEY}`,
@@ -124,13 +133,14 @@ const upsertSubscriber = async (data: { email: string; name?: string; plan?: str
       },
       body: JSON.stringify({
         email: data.email,
-        fields: {
-          name: data.name,
-          plan: data.plan
-        },
+        fields: { name: data.name, plan: data.plan },
         groups: ['financeapp-users']
       })
     });
+    if (!response.ok) {
+      console.error('[API Email] MailerLite error:', response.status, await response.text());
+      return false;
+    }
     return true;
   } catch (error) {
     console.error('[API Email] MailerLite error:', error);

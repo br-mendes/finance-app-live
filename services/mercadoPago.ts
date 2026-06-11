@@ -51,5 +51,7 @@ export const checkPaymentStatus = async (paymentId: string) => {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ action: 'payment-status', paymentId })
   });
-  return await response.json();
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.error || 'Erro ao consultar pagamento');
+  return result;
 };

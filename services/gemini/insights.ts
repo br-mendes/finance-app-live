@@ -26,9 +26,18 @@ const callGeminiApi = async (payload: Record<string, any>) => {
     body: JSON.stringify(payload)
   });
 
-  const result = await response.json();
-  if (!response.ok) throw new Error(result.error || 'Erro na análise de IA');
-  return result;
+  if (!response.ok) {
+    let detail: string;
+    try {
+      const body = await response.json();
+      detail = body.error || JSON.stringify(body);
+    } catch {
+      detail = await response.text();
+    }
+    throw new Error(`Gemini API error ${response.status} ${response.statusText}: ${detail}`);
+  }
+
+  return await response.json();
 };
 
 /**
