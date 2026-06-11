@@ -1,6 +1,4 @@
-
-const MAILERLITE_API_KEY = process.env.VITE_MAILERLITE_API_KEY || '';
-const MAILERLITE_BASE_URL = 'https://connect.mailerlite.com/api';
+// A chave do MailerLite vive apenas no endpoint serverless /api/email.
 
 export interface EmailData {
   to: string;
@@ -17,23 +15,11 @@ export const EmailTemplates = {
 };
 
 export const upsertSubscriber = async (data: { email: string, name?: string, plan?: string }) => {
-  if (!MAILERLITE_API_KEY) return;
   try {
-    await fetch(`${MAILERLITE_BASE_URL}/subscribers`, {
+    await fetch('/api/email', {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${MAILERLITE_API_KEY}`,
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      },
-      body: JSON.stringify({
-        email: data.email,
-        fields: {
-          name: data.name,
-          plan: data.plan
-        },
-        groups: ['financeapp-users']
-      })
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'subscribe', ...data })
     });
   } catch (error) {
     console.error('Error adding subscriber:', error);

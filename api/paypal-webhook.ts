@@ -7,15 +7,19 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY || ''
 );
 
-const PAYPAL_API_URL = process.env.VITE_PAYPAL_ENVIRONMENT === 'sandbox' 
-  ? 'https://api-m.sandbox.paypal.com' 
+const PAYPAL_ENVIRONMENT = process.env.PAYPAL_ENVIRONMENT || process.env.VITE_PAYPAL_ENVIRONMENT || 'sandbox';
+const PAYPAL_CLIENT_ID = process.env.PAYPAL_CLIENT_ID || process.env.VITE_PAYPAL_CLIENT_ID || '';
+const PAYPAL_SECRET_KEY = process.env.PAYPAL_SECRET_KEY || process.env.VITE_PAYPAL_SECRET_KEY || '';
+
+const PAYPAL_API_URL = PAYPAL_ENVIRONMENT === 'sandbox'
+  ? 'https://api-m.sandbox.paypal.com'
   : 'https://api-m.paypal.com';
 
 /**
  * Valida a assinatura do Webhook diretamente com a API do PayPal
  */
 async function verifyPayPalSignature(headers: any, body: any) {
-  const auth = btoa(`${process.env.VITE_PAYPAL_CLIENT_ID}:${process.env.VITE_PAYPAL_SECRET_KEY}`);
+  const auth = btoa(`${PAYPAL_CLIENT_ID}:${PAYPAL_SECRET_KEY}`);
   
   const response = await fetch(`${PAYPAL_API_URL}/v1/notifications/verify-webhook-signature`, {
     method: 'POST',
